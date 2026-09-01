@@ -1,0 +1,111 @@
+"""棋譜を解析して、ビューア用のJSONを吐く。
+
+    python3 export.py games/20260901_1056.kif -o out/20260901_1056.json
+
+各局面について 盤面(SFEN)・評価値・損失・最善手・読み筋 をまとめる。
+評価値はすべて先手視点。
+"""
+
+import argparse
+import json
+import sys
+import time
+from pathlib import Path
+
+import kif
+from engine import Engine, MATE_SCORE
+
+CLAMP = 2000
+DUBIOUS, MISTAKE, BLUNDER = 150, 300, 500
+
+
+def clamp(cp):
+    return 0 if cp is None else max(-CLAMP, min(CLAMP, cp))
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("kiffile")
+    ap.add_argument("-o", "--out")
+    ap.add_argument("--movetime", type=int, default=1500)
+    ap.add_argument("--pv", type=int, default=12)
+    ap.add_argument("--engine", default="fairy-stockfish")
+    args = ap.parse_args()
+
+    header, moves = kif.parse(Path(args.kiffile).read_text(encoding="utf-8"))
+    usi = kif.usi_moves(moves)
+
+    positions = []
+    with Engine(args.engine) as eng:
+        t0 = time.time()
+        for i in range(len(usi) + 1):
+            prefix = usi[:i]
+
+            # 盤面(SFEN)を取る。ついでに手数が合っているかを検算する
+            eng._send("position startpos" + (" moves " + " ".join(prefix) if i else ""))
+            eng._send("d")
+            eng._send("isready")
+            sfen = None
+            for l in eng._read_until("readyok"):
+                if l.startswith("Sfen:"):
+                    sfen = l.split("Sfen:", 1)[1].strip()
+            if sfen is None or int(sfen.rsplit(" ", 1)[1]) != i + 1:
+                sys.exit(f"✗ {i}手目で局面が食い違う。verify.py で確認すること")
+
+            r = eng.analyse(prefix, args.movetime)
+            cp = (r["score"] or 0) * (1 if i % 2 == 0 else -1)
+            positions.append({
+                "ply": i,
+                "sfen": sfen,
+                "cp": cp,
+                "best": r["best"],
+                "pv": r["pv"][: args.pv],
+                "depth": r["depth"],
+            })
+            print(f"\r  {i}/{len(usi)}", end="", file=sys.stderr)
+        print(f"\r  解析完了 ({time.time() - t0:.0f}秒)      ", file=sys.stderr)
+
+    # 各手の損失を出す
+    out_moves = []
+    for mv in moves:
+        n = mv["n"]
+        if mv["terminal"]:
+            out_moves.append({"n": n, "kif": mv["terminal"], "terminal": True,
+                              "side": mv["side"]})
+            continue
+        b, a = clamp(positions[n - 1]["cp"]), clamp(positions[n]["cp"])
+        loss = max(0, (b - a) if mv["side"] == "b" else (a - b))
+        out_moves.append({
+            "n": n, "kif": mv["kif"], "usi": mv["usi"], "side": mv["side"],
+            "loss": loss,
+            "grade": "blunder" if loss >= BLUNDER else "mistake" if loss >= MISTAKE
+                     else "dubious" if loss >= DUBIOUS else "",
+            "terminal": False,
+        })
+
+    def avg(side):
+        ls = [m["loss"] for m in out_moves if not m["terminal"] and m["side"] == side]
+        return round(sum(ls) / len(ls)) if ls else 0
+
+    data = {
+        "header": header,
+        "sente": header.get("先手", "?"), "gote": header.get("後手", "?"),
+        "senteRank": header.get("先手段級", ""), "goteRank": header.get("後手段級", ""),
+        "date": header.get("開始日時", ""),
+        "timeControl": f"{header.get('持ち時間','')}/秒読み{header.get('秒読み','')}",
+        "mateScore": MATE_SCORE,
+        "clamp": CLAMP,
+        "avgLoss": {"b": avg("b"), "w": avg("w")},
+        "moves": out_moves,
+        "positions": positions,
+    }
+
+    out = Path(args.out) if args.out else \
+        Path("out") / (Path(args.kiffile).stem + ".json")
+    out.parent.mkdir(exist_ok=True, parents=True)
+    out.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    print(f"書き出し: {out}  ({out.stat().st_size // 1024}KB)")
+
+
+if __name__ == "__main__":
+    main()
