@@ -18,7 +18,12 @@ PROMOTED_NAMES = ("成銀", "成桂", "成香", "と", "馬", "龍", "竜")
 TERMINAL = ("投了", "中断", "千日手", "持将棋", "切れ負け", "反則勝ち", "反則負け", "入玉勝ち", "詰み")
 
 HEADER_RE = re.compile(r"^(.+?)：(.*)$")
-MOVE_RE = re.compile(r"^\s*(\d+)\s+(\S+)")
+# 指し手行。指し手そのものは行末まで取る（`同　歩(76)` のように途中に
+# 全角スペースが入るので、\S+ で取ると「同」で切れて移動元を落とす）
+MOVE_RE = re.compile(r"^\s*(\d+)\s+(.+)$")
+# 指し手のうしろに付く消費時間 `( 0:03/00:00:23)`。移動元の (76) と違って
+# スラッシュを含むので取り違えない
+TIME_RE = re.compile(r"\(\s*[\d:]+\s*/\s*[\d:]+\s*\)\s*$")
 
 
 class KifError(ValueError):
@@ -40,8 +45,14 @@ def parse(text):
 
     for line in text.splitlines():
         line = line.rstrip()
-        if not line or line.startswith("#") or line.startswith("手数---"):
+        if not line or line.startswith(("#", "*")) or line.startswith("手数---"):
             continue
+
+        # 「変化：37手」以降は分岐の読み筋であって本譜ではない。
+        # 読み進めると手数が巻き戻った指し手が本譜に continuation として
+        # 混ざり、黙って別の将棋になるので、ここで打ち切る
+        if line.startswith("変化："):
+            break
 
         m = HEADER_RE.match(line)
         if m and not MOVE_RE.match(line):
@@ -51,7 +62,7 @@ def parse(text):
         m = MOVE_RE.match(line)
         if not m:
             continue
-        n, body = int(m.group(1)), m.group(2)
+        n, body = int(m.group(1)), _clean(m.group(2))
 
         entry = {"n": n, "kif": body, "usi": None, "terminal": None,
                  "side": "b" if n % 2 else "w"}
@@ -66,6 +77,16 @@ def parse(text):
         moves.append(entry)
 
     return header, moves
+
+
+def _clean(body):
+    """指し手表記から消費時間と空白を落とす。
+
+    `同　歩(76)` の全角スペースのように、表記の途中に空白が入ることがある。
+    指し手表記の中に意味のある空白はないので、まとめて取り除く。
+    """
+    body = TIME_RE.sub("", body)
+    return "".join(body.split())
 
 
 def _to_usi(body, prev_dest):
@@ -92,9 +113,12 @@ def _to_usi(body, prev_dest):
             raise KifError(f"打てない駒: {body}")
         return f"{DROP[piece]}*{dest}", dest
 
-    # 移動元 (79) を取り出す
+    # 移動元 (79) を取り出す。KIFでは盤上の駒を動かす手に括弧が必ず付くので、
+    # 括弧が無くて駒名だけなら「打」を省いた打ち手（そう書き出す実装もある）
     m = re.search(r"\((\d)(\d)\)$", rest)
     if not m:
+        if rest in DROP:
+            return f"{DROP[rest]}*{dest}", dest
         raise KifError(f"移動元が読めない: {body}")
     src = m.group(1) + "abcdefghi"[int(m.group(2)) - 1]
     piece_part = rest[: m.start()]
