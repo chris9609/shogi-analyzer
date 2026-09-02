@@ -140,6 +140,18 @@ svg{display:block;width:100%;height:auto;overflow:visible}
 .dl dd{margin:0;font-family:var(--mincho);font-size:15px}
 .dl dd.pv{font-family:var(--sans);font-size:12px;color:var(--ink2);
   line-height:1.75;word-break:break-all}
+/* 候補手。1位を濃く、2位以下を退かせて、目が最初に最善手へ行くようにする */
+.cands{display:grid;gap:8px}
+.cand{display:grid;grid-template-columns:14px 1fr auto;gap:4px 8px;align-items:baseline}
+.cand-n{font-size:10px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.cand-mv{font-family:var(--mincho);font-size:15px}
+.cand-cp{font-family:var(--mincho);font-size:14px;font-weight:600;
+  font-variant-numeric:tabular-nums}
+.cand-cp.b{color:var(--sente)} .cand-cp.w{color:var(--gote)}
+.cand-pv{grid-column:2/4;font-family:var(--sans);font-size:11.5px;color:var(--ink2);
+  line-height:1.7;word-break:break-all}
+.cand:not(.top) .cand-mv{font-size:14px;color:var(--ink2)}
+.cand:not(.top) .cand-pv{color:var(--muted)}
 .big{font-family:var(--mincho);font-size:30px;font-weight:600;line-height:1}
 .big.b{color:var(--sente)} .big.w{color:var(--gote)}
 
@@ -171,7 +183,7 @@ svg{display:block;width:100%;height:auto;overflow:visible}
       <span class="vs">—</span>
       <span class="pl w"><span class="mk">△</span><span class="nm" id="gote"></span><span class="rk" id="goteRank"></span></span>
     </div>
-    <div class="meta"><span id="date"></span><span id="tc"></span><span id="len"></span></div>
+    <div class="meta"><span id="date"></span><span id="tc"></span><span id="len"></span><span id="eng"></span></div>
   </div>
   <div class="stats">
     <div class="stat b"><div class="k">▲平均損失</div><div class="v tnum" id="avgB"></div></div>
@@ -213,8 +225,7 @@ svg{display:block;width:100%;height:auto;overflow:visible}
       <h2>この局面</h2>
       <div class="detail">
         <div class="dl"><dt>評価値</dt><dd><span class="big" id="dCp"></span> <span id="dSide" style="color:var(--muted);font-size:12px"></span></dd></div>
-        <div class="dl"><dt>最善手</dt><dd id="dBest"></dd></div>
-        <div class="dl"><dt>読み筋</dt><dd class="pv" id="dPv"></dd></div>
+        <div class="dl"><dt>候補手</dt><dd class="cands" id="dCands"></dd></div>
       </div>
     </div>
 
@@ -460,15 +471,31 @@ function markChart(){
 }
 
 /* ── 詳細と棋譜 ───────────────────────── */
+// 候補手。cp は先手視点（export.py で揃えてある）
+function candHtml(p){
+  const list = (p.candidates && p.candidates.length) ? p.candidates
+             : p.best ? [{move:p.best, cp:p.cp, pv:p.pv}] : [];
+  if (!list.length) return '<span style="color:var(--muted)">—</span>';
+  return list.map((c, i) => {
+    const line = c.pv && c.pv.length ? c.pv : (c.move ? [c.move] : []);
+    const ja = pvToJa(p.sfen, line);
+    const rest = ja.slice(1).join("　");
+    return `<div class="cand${i ? "" : " top"}">`
+      + `<span class="cand-n">${i + 1}</span>`
+      + `<span class="cand-mv">${ja[0] || "—"}</span>`
+      + `<span class="cand-cp ${c.cp >= 0 ? "b" : "w"}">${fmtCp(c.cp)}</span>`
+      + (rest ? `<div class="cand-pv">${rest}</div>` : "")
+      + `</div>`;
+  }).join("");
+}
+
 function renderDetail(){
   const p = DATA.positions[ply];
   const side = ply % 2 === 0 ? "b" : "w";
   $("dCp").textContent = fmtCp(p.cp);
   $("dCp").className = "big " + (p.cp >= 0 ? "b" : "w");
   $("dSide").textContent = `手番 ${side === "b" ? "▲先手" : "△後手"} · depth ${p.depth}`;
-  const st = parseSfen(p.sfen);
-  $("dBest").textContent = p.best ? usiToJa(st, p.best) : "—";
-  $("dPv").textContent = p.pv.length ? pvToJa(p.sfen, p.pv).join("　") : "—";
+  $("dCands").innerHTML = candHtml(p);
   $("plyLabel").textContent = ply + " / " + N;
   $("slider").value = ply;
   document.querySelectorAll(".mv").forEach(el =>
@@ -506,6 +533,11 @@ $("date").textContent = DATA.date;   $("tc").textContent = DATA.timeControl;
 const term = DATA.moves.at(-1);
 $("len").textContent = `全${DATA.moves.length}手${term && term.terminal ? " " + term.kif : ""}`;
 $("avgB").textContent = DATA.avgLoss.b; $("avgW").textContent = DATA.avgLoss.w;
+// 評価値のものさし。どのエンジン・評価モード・持ち時間で測ったかで数字の意味が変わる
+const EI = DATA.engineInfo;
+if (EI) $("eng").textContent =
+  `${EI.evalMode}${EI.evalFile ? " " + EI.evalFile : ""} · ${EI.movetime}ms`
+  + (EI.multipv > 1 ? ` · 候補${EI.multipv}手` : "");
 $("slider").max = N;
 
 renderChart(); renderMoves(); go(0);

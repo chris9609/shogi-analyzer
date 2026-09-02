@@ -80,6 +80,12 @@ def main():
     ap.add_argument("--at", type=int, help="この手数の局面だけ詳しく見る")
     ap.add_argument("--pv", type=int, default=10, help="読み筋を何手表示するか")
     ap.add_argument("--engine", default="fairy-stockfish")
+    ap.add_argument("--eval-file", help="NNUE評価関数のパス（既定: nnue/*.nnue を自動検出）")
+    ap.add_argument("--classical", action="store_true",
+                    help="NNUEを使わず、評価関数なしの classical 評価で解析する")
+    ap.add_argument("--multipv", type=int, default=1,
+                    help="候補手を何手まで出すか（既定1）。増やすと同じ時間での"
+                         "読みが浅くなるので、悪手検出の目的では1のままでよい")
     ap.add_argument("--clamp", type=int, default=CLAMP,
                     help="損失計算で評価値を丸める上限。これを超えた局面は"
                          "「もう決まっている」とみなして損失を数えない")
@@ -94,29 +100,46 @@ def main():
     print(f"{header.get('開始日時','')}  {header.get('持ち時間','')}"
           f"/秒読み{header.get('秒読み','')}  全{len(moves)}手\n")
 
-    with Engine(args.engine) as eng:
+    with Engine(args.engine, eval_file="" if args.classical else args.eval_file) as eng:
+        # 評価値の意味はエンジンと評価モードで変わる。数字だけ切り出されても
+        # 何のものさしで測ったか分かるよう、必ず頭に出す
+        print(f"エンジン: {eng.describe()}   movetime {args.movetime}ms"
+              + (f"   MultiPV {args.multipv}" if args.multipv > 1 else ""))
+        if eng.eval_mode == "classical":
+            print("  ※ 評価関数を積んでいないので、互角の局面では±100点程度の"
+                  "誤差が出る。細かい数字は当てにしないこと")
+        print()
+
         # --at: 指定局面だけ深く読む
         if args.at is not None:
             n = args.at
             if not 0 <= n <= len(usi):
                 sys.exit(f"手数は 0〜{len(usi)} の範囲で指定してください")
-            r = eng.analyse(usi[:n], args.movetime)
+            r = eng.analyse(usi[:n], args.movetime, multipv=args.multipv)
             side = "先手" if n % 2 == 0 else "後手"
             cp = (r["score"] or 0) if n % 2 == 0 else -(r["score"] or 0)
             print(f"{n}手目まで進んだ局面（手番: {side}）")
             print(f"  評価値（先手視点）: {fmt_score(cp)}   depth {r['depth']}")
             print(f"  最善手: {usi_to_ja(r['best'])}  [{r['best']}]")
             print(f"  読み筋: " + " ".join(r["pv"][: args.pv]))
+            if len(r["candidates"]) > 1:
+                print("  候補手:")
+                for c in r["candidates"]:
+                    # 表示はすべて先手視点。エンジンは手番側視点で返す
+                    print(f"    {c['rank']}. {usi_to_ja(c['move']):<12} "
+                          f"{fmt_score(c['cp'] if n % 2 == 0 else -c['cp']):>8}  "
+                          f"[{c['move']}]  " + " ".join(c["pv"][1: args.pv]))
             return
 
         # 全局面を順に解析
         t0 = time.time()
         evals = []
         for i in range(len(usi) + 1):
-            r = eng.analyse(usi[:i], args.movetime)
+            r = eng.analyse(usi[:i], args.movetime, multipv=args.multipv)
             # i手目まで指した局面の手番は、iが偶数なら先手
             cp = r["score"] if i % 2 == 0 else -(r["score"] or 0)
-            evals.append({"cp": cp, "best": r["best"], "pv": r["pv"]})
+            evals.append({"cp": cp, "best": r["best"], "pv": r["pv"],
+                          "candidates": r["candidates"]})
             print(f"\r  解析中 {i}/{len(usi)} ...", end="", file=sys.stderr)
         print(f"\r  解析完了 ({time.time()-t0:.0f}秒)          ", file=sys.stderr)
 
@@ -140,7 +163,7 @@ def main():
         print(f"{n:>3} {mv['kif']:<12} {fmt_score(after['cp']):>8} {loss:>6}{mark(loss)}"
               f"  {star:<12} " + " ".join(before["pv"][: args.pv]))
         if loss >= DUBIOUS:
-            worst.append((loss, mv, best))
+            worst.append((loss, mv, best, before.get("candidates", [])))
 
     print()
     _summary(moves, evals, worst, header)
@@ -165,10 +188,18 @@ def _summary(moves, evals, worst, header):
 
     if worst:
         print("\n■ 響いた手（損失の大きい順）")
-        for loss, mv, best in sorted(worst, reverse=True, key=lambda x: x[0])[:5]:
+        if any(len(c) > 1 for *_, c in worst):
+            print("  （評価値はすべて先手視点。プラスが先手優勢）")
+        for loss, mv, best, cands in sorted(worst, reverse=True, key=lambda x: x[0])[:5]:
             who = "▲" if mv["side"] == "b" else "△"
             print(f"  {mv['n']:>3}手目 {who}{mv['kif']:<12} -{loss:<6} "
                   f"→ 最善は {usi_to_ja(best)} [{best}]")
+            # 「代わりに何を指せばよかったか」は、最善手ひとつより
+            # 候補が並んだほうが指し直しの役に立つ
+            sign = 1 if mv["side"] == "b" else -1
+            for c in cands:
+                print(f"          {c['rank']}. {usi_to_ja(c['move']):<12} "
+                      f"{fmt_score(sign * c['cp']):>8}  [{c['move']}]")
 
 
 if __name__ == "__main__":

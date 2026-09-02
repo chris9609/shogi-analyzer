@@ -30,13 +30,20 @@ def main():
     ap.add_argument("--movetime", type=int, default=1500)
     ap.add_argument("--pv", type=int, default=12)
     ap.add_argument("--engine", default="fairy-stockfish")
+    ap.add_argument("--eval-file", help="NNUE評価関数のパス（既定: nnue/*.nnue を自動検出）")
+    ap.add_argument("--classical", action="store_true",
+                    help="NNUEを使わず classical 評価で解析する")
+    ap.add_argument("--multipv", type=int, default=3,
+                    help="候補手を何手まで残すか（既定3）")
     args = ap.parse_args()
 
     header, moves = kif.parse(Path(args.kiffile).read_text(encoding="utf-8"))
     usi = kif.usi_moves(moves)
 
     positions = []
-    with Engine(args.engine) as eng:
+    with Engine(args.engine, eval_file="" if args.classical else args.eval_file) as eng:
+        print(f"エンジン: {eng.describe()}  movetime {args.movetime}ms "
+              f"MultiPV {args.multipv}", file=sys.stderr)
         t0 = time.time()
         for i in range(len(usi) + 1):
             prefix = usi[:i]
@@ -52,7 +59,7 @@ def main():
             if sfen is None or int(sfen.rsplit(" ", 1)[1]) != i + 1:
                 sys.exit(f"✗ {i}手目で局面が食い違う。verify.py で確認すること")
 
-            r = eng.analyse(prefix, args.movetime)
+            r = eng.analyse(prefix, args.movetime, multipv=args.multipv)
             cp = (r["score"] or 0) * (1 if i % 2 == 0 else -1)
             positions.append({
                 "ply": i,
@@ -61,6 +68,14 @@ def main():
                 "best": r["best"],
                 "pv": r["pv"][: args.pv],
                 "depth": r["depth"],
+                # 候補手。cp は局面の cp と同じく先手視点に揃える。
+                # エンジンは手番側視点で返すので、ここで符号を合わせておかないと
+                # 同じ画面の中で向きの違う数字が並ぶ
+                "candidates": [
+                    {"move": c["move"], "cp": c["cp"] * (1 if i % 2 == 0 else -1),
+                     "pv": c["pv"][: args.pv]}
+                    for c in r["candidates"]
+                ],
             })
             print(f"\r  {i}/{len(usi)}", end="", file=sys.stderr)
         print(f"\r  解析完了 ({time.time() - t0:.0f}秒)      ", file=sys.stderr)
@@ -95,6 +110,19 @@ def main():
         "timeControl": f"{header.get('持ち時間','')}/秒読み{header.get('秒読み','')}",
         "mateScore": MATE_SCORE,
         "clamp": CLAMP,
+        # 🔑 評価値は「どのものさしで測ったか」で意味が変わる。エンジン・評価モード・
+        # 探索時間が違うJSONを混ぜて平均損失を並べると、腕前が変わっていないのに
+        # 上下したように見える。stats.py はここを見て束を分ける
+        "engineInfo": {
+            "engine": eng.name,
+            "evalMode": eng.eval_mode,
+            # 引数ではなく、エンジンが実際に積んだファイルを記録する
+            "evalFile": Path(eng.eval_file).name if eng.eval_file else "",
+            "movetime": args.movetime,
+            "multipv": args.multipv,
+            "clamp": CLAMP,
+            "thresholds": {"dubious": DUBIOUS, "mistake": MISTAKE, "blunder": BLUNDER},
+        },
         "avgLoss": {"b": avg("b"), "w": avg("w")},
         "moves": out_moves,
         "positions": positions,
