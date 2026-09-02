@@ -112,6 +112,7 @@ header{display:flex;flex-wrap:wrap;gap:20px 32px;align-items:flex-end;
   filter:drop-shadow(0 1px 1.5px rgba(60,40,15,.45))}
 .koma.w{transform:rotate(180deg)}
 .koma.pro{color:var(--koma-pro)}
+.koma[hidden]{display:none}
 .koma.two{font-size:clamp(8px,1.5vw,12px);writing-mode:vertical-rl;letter-spacing:-.08em}
 
 /* ── controls ─────────────────────────── */
@@ -346,32 +347,58 @@ function lastMoveSquare(p){              // USI の移動先 → [rank0, file0]
   return [rank - 1, 9 - file];
 }
 
+// 🔑 盤のマス目は起動時に一度だけ作り、以降は中身だけ書き換える。
+// 毎手 innerHTML を作り直すと81マス＋駒が丸ごと捨てられて作り直されるので、
+// 「次の一手」を押すたびに盤がちらつく（押しっぱなしにすると特に目立つ）
+const SQ = [];
+function buildBoard(){
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < 81; i++){
+    const sq = document.createElement("div");
+    sq.className = "sq";
+    const koma = document.createElement("div");
+    koma.className = "koma";
+    koma.hidden = true;
+    sq.appendChild(koma);
+    frag.appendChild(sq);
+    SQ.push({sq, koma});
+  }
+  $("board").appendChild(frag);
+}
+
+let shownFlip = null, shownHand = ["", ""];
+
 function renderBoard(){
   const {board, hands} = parseSfen(DATA.positions[ply].sfen);
   const hit = lastMoveSquare(ply);
 
-  const files = flipped ? [1,2,3,4,5,6,7,8,9] : [9,8,7,6,5,4,3,2,1];
-  $("files").innerHTML = files.map(f => `<span>${f}</span>`).join("");
-  const ranks = flipped ? [...KAN].reverse() : [...KAN];
-  $("ranks").innerHTML = ranks.map(r => `<span>${r}</span>`).join("");
+  // 筋・段の目盛りは盤を反転したときしか変わらない
+  if (shownFlip !== flipped){
+    const files = flipped ? [1,2,3,4,5,6,7,8,9] : [9,8,7,6,5,4,3,2,1];
+    $("files").innerHTML = files.map(f => `<span>${f}</span>`).join("");
+    const ranks = flipped ? [...KAN].reverse() : [...KAN];
+    $("ranks").innerHTML = ranks.map(r => `<span>${r}</span>`).join("");
+    shownFlip = flipped;
+  }
 
-  const rows = flipped ? [...board].reverse() : board;
-  let html = "";
-  rows.forEach((row, ri) => {
-    const cells = flipped ? [...row].reverse() : row;
-    cells.forEach((p, ci) => {
+  for (let ri = 0; ri < 9; ri++){
+    for (let ci = 0; ci < 9; ci++){
       const realR = flipped ? 8 - ri : ri;
       const realC = flipped ? 8 - ci : ci;
-      const isLast = hit && hit[0] === realR && hit[1] === realC;
-      if (!p){ html += `<div class="sq${isLast?" last":""}"></div>`; return; }
+      const p = board[realR][realC];
+      const {sq, koma} = SQ[ri * 9 + ci];
+      sq.classList.toggle("last", !!(hit && hit[0] === realR && hit[1] === realC));
+      if (!p){ koma.hidden = true; continue; }
       const t = komaText(p);
       const cls = [ "koma",
         (p.black ? (flipped?"w":"") : (flipped?"":"w")),
         p.promoted ? "pro" : "" ].filter(Boolean).join(" ");
-      html += `<div class="sq${isLast?" last":""}"><div class="${cls}">${t}</div></div>`;
-    });
-  });
-  $("board").innerHTML = html;
+      // 同じ値の代入でもスタイル再計算が走るので、変わったときだけ書く
+      if (koma.textContent !== t) koma.textContent = t;
+      if (koma.className !== cls) koma.className = cls;
+      koma.hidden = false;
+    }
+  }
 
   const handHtml = side => {
     const h = hands[side];
@@ -381,10 +408,13 @@ function renderBoard(){
   };
   const topSide = flipped ? "b" : "w", botSide = flipped ? "w" : "b";
   const label = s => (s === "b" ? "▲" : "△") + (s === "b" ? DATA.sente : DATA.gote);
+  const top = `<span class="lab">${label(topSide)}</span>` + handHtml(topSide);
+  const bot = `<span class="lab">${label(botSide)}</span>` + handHtml(botSide);
   $("handTop").className = "hand " + topSide;
-  $("handTop").innerHTML = `<span class="lab">${label(topSide)}</span>` + handHtml(topSide);
   $("handBottom").className = "hand " + botSide;
-  $("handBottom").innerHTML = `<span class="lab">${label(botSide)}</span>` + handHtml(botSide);
+  // 持ち駒は動かない手のほうが多い。中身が変わったときだけ差し替える
+  if (shownHand[0] !== top){ $("handTop").innerHTML = top; shownHand[0] = top; }
+  if (shownHand[1] !== bot){ $("handBottom").innerHTML = bot; shownHand[1] = bot; }
 }
 
 /* ── 評価値の表示 ─────────────────────── */
@@ -489,17 +519,24 @@ function candHtml(p){
   }).join("");
 }
 
+let shownCands = "", curMv = null;
+
 function renderDetail(){
   const p = DATA.positions[ply];
   const side = ply % 2 === 0 ? "b" : "w";
   $("dCp").textContent = fmtCp(p.cp);
   $("dCp").className = "big " + (p.cp >= 0 ? "b" : "w");
   $("dSide").textContent = `手番 ${side === "b" ? "▲先手" : "△後手"} · depth ${p.depth}`;
-  $("dCands").innerHTML = candHtml(p);
+  const ch = candHtml(p);
+  if (shownCands !== ch){ $("dCands").innerHTML = ch; shownCands = ch; }
   $("plyLabel").textContent = ply + " / " + N;
   $("slider").value = ply;
-  document.querySelectorAll(".mv").forEach(el =>
-    el.setAttribute("aria-current", +el.dataset.n === ply ? "true" : "false"));
+  const next = $("movelist").querySelector(`.mv[data-n="${ply}"]`);
+  if (next !== curMv){
+    if (curMv) curMv.setAttribute("aria-current", "false");
+    if (next) next.setAttribute("aria-current", "true");
+    curMv = next;
+  }
 }
 
 function renderMoves(){
@@ -519,11 +556,20 @@ function renderMoves(){
     el.onclick = () => go(Math.min(+el.dataset.n, N)));
 }
 
+// scrollIntoView はページ全体をスクロールさせることがある（「次の一手」を
+// 押すたびに画面が動く）。棋譜欄の中だけで位置を合わせる
+function keepVisible(el){
+  const box = $("movelist");
+  const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
+  if (r.top < b.top) box.scrollTop += r.top - b.top;
+  else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom;
+}
+
 function go(n){
   ply = Math.max(0, Math.min(N, n));
   renderBoard(); renderDetail(); markChart();
-  const cur = document.querySelector('.mv[aria-current="true"]');
-  if (cur) cur.scrollIntoView({block:"nearest"});
+  if (curMv) keepVisible(curMv);
+  else $("movelist").scrollTop = 0;   // 開始局面に戻ったら棋譜欄も先頭へ
 }
 
 /* ── 起動 ─────────────────────────────── */
@@ -540,7 +586,7 @@ if (EI) $("eng").textContent =
   + (EI.multipv > 1 ? ` · 候補${EI.multipv}手` : "");
 $("slider").max = N;
 
-renderChart(); renderMoves(); go(0);
+buildBoard(); renderChart(); renderMoves(); go(0);
 
 $("first").onclick = () => go(0);
 $("prev").onclick  = () => go(ply - 1);

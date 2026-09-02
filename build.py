@@ -30,6 +30,11 @@ def main():
 
     body = tpl.replace(PLACEHOLDER, payload)
 
+    # タイトルに対局者を入れる。複数局を並べたときに、タブでもギャラリーでも
+    # どの将棋か見分けられるようにする（テンプレートのままだと全部同じ名前になる）
+    title = f"▲{data.get('sente','?')} vs △{data.get('gote','?')}"
+    body = body.replace("<title>棋譜検討盤</title>", f"<title>{title}</title>", 1)
+
     # ローカルで開けるよう、完全なHTML文書として包む。
     # （Artifactとして公開する場合はこの外枠が向こうで付くので viewer_template.html を渡す）
     doc = body if args.bare else ('<!doctype html>\n<html lang="ja">\n<head>\n'
