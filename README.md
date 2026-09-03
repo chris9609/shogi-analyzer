@@ -2,6 +2,25 @@
 
 将棋ウォーズの棋譜をローカルで解析する。棋神解析の自前版。課金なし・通信なし。
 
+*A local Shogi Wars kifu analyzer. Runs Fairy-Stockfish offline — no fees, no network.*
+
+## 必要なもの
+
+- **Python 3**（標準ライブラリのみ。`pip install` するものは無い）
+- **Fairy-Stockfish** — `brew install fairy-stockfish`
+
+これだけで動く。NNUE評価関数は任意で、置かなければ classical 評価で走る（→[NNUE評価関数](#nnue評価関数)）。
+
+動作確認は macOS のみ（`open` と `add.py` の `pbpaste` を使っている）。
+
+```bash
+git clone https://github.com/chris9609/shogi-analyzer.git
+cd shogi-analyzer
+python3 export.py games/20260901_1056.kif   # 同梱の棋譜で試せる
+python3 build.py out/20260901_1056.json
+open out/20260901_1056.html
+```
+
 ## 使い方
 
 ```bash
@@ -241,3 +260,15 @@ MultiPV を 1 と 3 で変えたときの差（3手）と同じ大きさで、�
 
 **対局が終わったあとの検討にのみ使うこと。** 対局中に見るのはソフト指しで、
 将棋ウォーズの規約違反かつBAN対象。
+
+## ライセンス
+
+このリポジトリのコードは [MIT License](LICENSE)。
+
+解析エンジンの **Fairy-Stockfish は GPLv3** で、このリポジトリには含めていない
+（`brew` で各自入れる）。`engine.py` はエンジンを別プロセスとして起動し、USIプロトコルで
+やりとりしているだけなので、リンクはしていない。
+
+**NNUE評価関数（`*.nnue`）も含めていない。** 配布元の条件はそちらを確認すること。
+
+同梱の `games/*.kif` は作者自身の対局。対局相手のユーザー名が含まれる。
