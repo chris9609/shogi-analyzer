@@ -85,7 +85,7 @@ header{display:flex;flex-wrap:wrap;gap:20px 32px;align-items:flex-end;
 .ranks{top:0;bottom:0;right:-14px;grid-template-rows:repeat(9,1fr);
   align-items:center;text-align:center;width:12px}
 .board{display:grid;grid-template-columns:repeat(9,1fr);
-  grid-template-rows:repeat(9,1fr);aspect-ratio:1;
+  grid-template-rows:repeat(9,1fr);aspect-ratio:1;position:relative;
   border:5px solid var(--board-frame);
   /* 木目は柾目を薄く重ねるだけ。写真テクスチャは使わない */
   background:
@@ -114,15 +114,43 @@ header{display:flex;flex-wrap:wrap;gap:20px 32px;align-items:flex-end;
 .koma.pro{color:var(--koma-pro)}
 .koma[hidden]{display:none}
 .koma.two{font-size:clamp(8px,1.5vw,12px);writing-mode:vertical-rl;letter-spacing:-.08em}
+/* 棋神の一手。盤の上に1枚だけ SVG を重ね、手を送るたびに属性だけ書き換える。
+   inset:0 は枠（border）の内側＝9×9のマス目そのものに合う */
+.best{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.best[hidden]{display:none}
+.best .halo{stroke:var(--koma-hi);stroke-width:.34;stroke-linecap:round;opacity:.92;fill:none}
+.best .line{stroke-width:.15;stroke-linecap:round;fill:none}
+.best .head{stroke:var(--koma-hi);stroke-width:.06;stroke-linejoin:round}
+.best .ring{fill:none;stroke-width:.11}
+.best .drop{font-family:var(--mincho);font-weight:600;font-size:.52px;
+  text-anchor:middle;dominant-baseline:central;
+  paint-order:stroke;stroke:var(--koma-hi);stroke-width:.14;stroke-linejoin:round}
+.best.b .line,.best.b .ring{stroke:var(--sente)} .best.b .head,.best.b .drop{fill:var(--sente)}
+.best.w .line,.best.w .ring{stroke:var(--gote)}  .best.w .head,.best.w .drop{fill:var(--gote)}
 
 /* ── controls ─────────────────────────── */
 .ctl{display:flex;align-items:center;gap:8px;margin-top:12px}
+.ctl button{white-space:nowrap;flex:none}
 button{font:inherit;background:var(--surface);color:var(--ink);cursor:pointer;
   border:1px solid var(--rule-strong);border-radius:2px;padding:5px 10px;line-height:1}
 button:hover{border-color:var(--ink2)}
 button:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
 .ctl .ply{font-family:var(--mincho);font-size:15px;min-width:74px;text-align:center}
 input[type=range]{flex:1;accent-color:var(--gold);min-width:60px}
+button[aria-pressed="true"]{background:var(--gold);border-color:var(--gold);color:#fff}
+/* 棋神の一手と実際の手を並べる行。色に頼らず文字で分かるようにする */
+.kishin{margin-top:10px;padding:8px 10px;background:var(--sunk);border-radius:2px;
+  font-size:12.5px;color:var(--ink2);display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline}
+.kishin .body{display:contents}
+.kishin .hint{color:var(--muted);font-size:11.5px}
+/* 「棋神の一手 ▲５八歩 −1013」「実際 ▲５八金 −875 ??」はそれぞれひと塊で折り返す */
+.kishin .pair{display:inline-flex;gap:6px;align-items:baseline;white-space:nowrap}
+.kishin .k{font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+.kishin .km{font-family:var(--mincho);font-size:15px;color:var(--ink)}
+.kishin .b{color:var(--sente)} .kishin .w{color:var(--gote)}
+.kishin .cp{font-family:var(--mincho);font-weight:600;font-variant-numeric:tabular-nums}
+.kishin .same{color:var(--gold);font-weight:600}
+.kishin .g{font-family:var(--mincho);font-weight:700}
 
 /* ── chart ────────────────────────────── */
 .chartbox{padding:6px 14px 12px;position:relative}
@@ -209,6 +237,10 @@ svg{display:block;width:100%;height:auto;overflow:visible}
       <button id="last" title="最終局面">▶|</button>
       <input type="range" id="slider" min="0" value="0">
       <button id="flip" title="盤を反転">⇅</button>
+    </div>
+    <div class="kishin">
+      <button id="kishin" title="棋神の一手を盤に出す（K）" aria-pressed="false">棋神</button>
+      <span class="body" id="kishinLine"></span>
     </div>
   </div>
 
@@ -334,6 +366,7 @@ function pvToJa(sfen, pv){
 const N = DATA.positions.length - 1;
 let ply = 0;
 let flipped = DATA.gote === ME;          // 自分が下に来るように
+let kishin = false;                      // 棋神の一手を盤に出すか
 
 const $ = id => document.getElementById(id);
 const KAN = "一二三四五六七八九";
@@ -364,6 +397,95 @@ function buildBoard(){
     SQ.push({sq, koma});
   }
   $("board").appendChild(frag);
+  // 棋神の一手の層。矢印も枠も1度だけ作り、renderBest で属性だけ動かす
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 9 9");
+  svg.setAttribute("preserveAspectRatio", "none");
+  svg.setAttribute("aria-hidden", "true");
+  svg.id = "best";
+  svg.innerHTML = `<line class="halo"/><line class="line"/><polygon class="head"/>
+    <rect class="ring" rx=".07"/><text class="drop"></text>`;
+  svg.hidden = true;
+  $("board").appendChild(svg);
+}
+
+/* ── 棋神の一手 ───────────────────────── */
+// その局面で指せる最善手（USI）。古いJSONは candidates を持たないので best に落ちる
+const bestOf = p => (p.candidates && p.candidates.length && p.candidates[0].move) || p.best || null;
+// 局面 ply から実際に指された手。moves[].n は「指した後」の手数
+const playedFrom = ply => DATA.moves.find(m => m.n === ply + 1 && !m.terminal) || null;
+
+// 盤の座標 [rank0, col0] → 表示上のマス中心（0..9 の SVG 座標）
+function cellCenter(r, c){
+  const ri = flipped ? 8 - r : r, ci = flipped ? 8 - c : c;
+  return [ci + .5, ri + .5];
+}
+
+function renderBest(){
+  const svg = $("best");
+  const p = DATA.positions[ply];
+  const u = kishin ? bestOf(p) : null;
+  if (!u){ svg.hidden = true; return; }
+  svg.hidden = false;
+  svg.setAttribute("class", "best " + (ply % 2 === 0 ? "b" : "w"));
+  const [dr, dc] = sqIdx(u.slice(2, 4));
+  const [dx, dy] = cellCenter(dr, dc);
+  const ring = svg.querySelector(".ring");
+  ring.setAttribute("x", dx - .42); ring.setAttribute("y", dy - .42);
+  ring.setAttribute("width", .84); ring.setAttribute("height", .84);
+  const halo = svg.querySelector(".halo"), line = svg.querySelector(".line"),
+        head = svg.querySelector(".head"), drop = svg.querySelector(".drop");
+  if (u[1] === "*"){                     // 打つ手は矢印の尻尾がない。着地点に駒名を置く
+    halo.setAttribute("visibility", "hidden"); line.setAttribute("visibility", "hidden");
+    head.setAttribute("visibility", "hidden");
+    drop.setAttribute("visibility", "visible");
+    drop.setAttribute("x", dx); drop.setAttribute("y", dy);
+    // 盤上の駒と同じく、上側の手番の駒は逆さに置く
+    const upside = (ply % 2 === 1) !== flipped;
+    drop.setAttribute("transform", upside ? `rotate(180 ${dx} ${dy})` : "");
+    drop.textContent = KANJI[u[0]];
+    return;
+  }
+  drop.setAttribute("visibility", "hidden");
+  const [sr, sc] = sqIdx(u.slice(0, 2));
+  const [sx, sy] = cellCenter(sr, sc);
+  const vx = dx - sx, vy = dy - sy, len = Math.hypot(vx, vy) || 1;
+  const ux = vx / len, uy = vy / len;
+  // 矢印の先は着地マスの枠に触れるところで止める。先端の三角は .36、線はその手前まで
+  const tipX = dx - ux * .45, tipY = dy - uy * .45;
+  const baseX = tipX - ux * .36, baseY = tipY - uy * .36;
+  const px = -uy * .2, py = ux * .2;
+  for (const l of [halo, line]){
+    l.setAttribute("visibility", "visible");
+    l.setAttribute("x1", sx); l.setAttribute("y1", sy);
+    l.setAttribute("x2", baseX); l.setAttribute("y2", baseY);
+  }
+  head.setAttribute("visibility", "visible");
+  head.setAttribute("points",
+    `${tipX},${tipY} ${baseX + px},${baseY + py} ${baseX - px},${baseY - py}`);
+}
+
+function renderKishinLine(){
+  const box = $("kishinLine");
+  if (!kishin){ box.innerHTML = `<span class="hint">押すと、この局面での最善手を盤に出す</span>`; return; }
+  const p = DATA.positions[ply];
+  const side = ply % 2 === 0 ? "b" : "w";
+  const u = bestOf(p);
+  const st = parseSfen(p.sfen);
+  const bestJa = u ? usiToJa(st, u) : "—";
+  const mv = playedFrom(ply);
+  let actual;
+  if (!mv) actual = `<span style="color:var(--muted)">—</span>`;
+  else if (mv.usi === u) actual = `<span class="same">一致 ✓</span>`;
+  else {
+    const sym = mv.grade === "blunder" ? "??" : mv.grade === "mistake" ? "?" : mv.grade ? "?!" : "";
+    actual = `<span class="km ${side}">${side === "b" ? "▲" : "△"}${mv.kif}</span>`
+      + (mv.loss ? `<span class="cp ${side}">−${mv.loss}</span>` : "")
+      + (sym ? `<span class="g ${side}">${sym}</span>` : "");
+  }
+  box.innerHTML = `<span class="pair"><span class="k">棋神の一手</span><span class="km ${side}">${bestJa}</span>`
+    + `<span class="cp ${p.cp >= 0 ? "b" : "w"}">${fmtCp(p.cp)}</span></span>`
+    + `<span class="pair"><span class="k">実際</span>${actual}</span>`;
 }
 
 let shownFlip = null, shownHand = ["", ""];
@@ -415,6 +537,7 @@ function renderBoard(){
   // 持ち駒は動かない手のほうが多い。中身が変わったときだけ差し替える
   if (shownHand[0] !== top){ $("handTop").innerHTML = top; shownHand[0] = top; }
   if (shownHand[1] !== bot){ $("handBottom").innerHTML = bot; shownHand[1] = bot; }
+  renderBest();
 }
 
 /* ── 評価値の表示 ─────────────────────── */
@@ -567,7 +690,7 @@ function keepVisible(el){
 
 function go(n){
   ply = Math.max(0, Math.min(N, n));
-  renderBoard(); renderDetail(); markChart();
+  renderBoard(); renderDetail(); renderKishinLine(); markChart();
   if (curMv) keepVisible(curMv);
   else $("movelist").scrollTop = 0;   // 開始局面に戻ったら棋譜欄も先頭へ
 }
@@ -594,9 +717,15 @@ $("next").onclick  = () => go(ply + 1);
 $("last").onclick  = () => go(N);
 $("slider").oninput = e => go(+e.target.value);
 $("flip").onclick = () => { flipped = !flipped; renderBoard(); };
+$("kishin").onclick = () => {
+  kishin = !kishin;
+  $("kishin").setAttribute("aria-pressed", kishin);
+  renderBest(); renderKishinLine();
+};
 addEventListener("keydown", e => {
   if (e.key === "ArrowLeft"){ go(ply - 1); e.preventDefault(); }
   if (e.key === "ArrowRight"){ go(ply + 1); e.preventDefault(); }
+  if (e.key === "k" || e.key === "K"){ $("kishin").click(); }
 });
 
 const tip = $("tip"), chart = $("chart");
