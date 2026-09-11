@@ -116,8 +116,9 @@ header{display:flex;flex-wrap:wrap;gap:20px 32px;align-items:flex-end;
 .koma.two{font-size:clamp(8px,1.5vw,12px);writing-mode:vertical-rl;letter-spacing:-.08em}
 /* 棋神の一手。盤の上に1枚だけ SVG を重ね、手を送るたびに属性だけ書き換える。
    inset:0 は枠（border）の内側＝9×9のマス目そのものに合う */
-.best{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
-.best[hidden]{display:none}
+/* 🔑 SVG 要素には hidden プロパティが無い（svg.hidden=true は属性にならない）。クラスで出し入れする */
+.best{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;display:none}
+.best.on{display:block}
 .best .halo{stroke:var(--koma-hi);stroke-width:.34;stroke-linecap:round;opacity:.92;fill:none}
 .best .line{stroke-width:.15;stroke-linecap:round;fill:none}
 .best .head{stroke:var(--koma-hi);stroke-width:.06;stroke-linejoin:round}
@@ -403,9 +404,9 @@ function buildBoard(){
   svg.setAttribute("preserveAspectRatio", "none");
   svg.setAttribute("aria-hidden", "true");
   svg.id = "best";
+  svg.setAttribute("class", "best");
   svg.innerHTML = `<line class="halo"/><line class="line"/><polygon class="head"/>
     <rect class="ring" rx=".07"/><text class="drop"></text>`;
-  svg.hidden = true;
   $("board").appendChild(svg);
 }
 
@@ -425,9 +426,8 @@ function renderBest(){
   const svg = $("best");
   const p = DATA.positions[ply];
   const u = kishin ? bestOf(p) : null;
-  if (!u){ svg.hidden = true; return; }
-  svg.hidden = false;
-  svg.setAttribute("class", "best " + (ply % 2 === 0 ? "b" : "w"));
+  if (!u){ svg.setAttribute("class", "best"); return; }
+  svg.setAttribute("class", "best on " + (ply % 2 === 0 ? "b" : "w"));
   const [dr, dc] = sqIdx(u.slice(2, 4));
   const [dx, dy] = cellCenter(dr, dc);
   const ring = svg.querySelector(".ring");
