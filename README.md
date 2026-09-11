@@ -2,14 +2,16 @@
 
 将棋ウォーズの棋譜をローカルで解析する。棋神解析の自前版。課金なし・通信なし。
 
-*A local Shogi Wars kifu analyzer. Runs Fairy-Stockfish offline — no fees, no network.*
+*A local Shogi Wars kifu analyzer. Runs YaneuraOu + Suisho5 (or Fairy-Stockfish) offline — no fees, no network.*
 
 ## 必要なもの
 
 - **Python 3**（標準ライブラリのみ。`pip install` するものは無い）
-- **Fairy-Stockfish** — `brew install fairy-stockfish`
+- **エンジン**。どちらか:
+  - **やねうら王 ＋ 水匠5**（推奨。棋神に近い数字が出る）— ソースからビルドする（→[エンジン](#エンジン)、5分）
+  - **Fairy-Stockfish** — `brew install fairy-stockfish` 一発。ただし評価値の振れ幅が棋神より小さい
 
-これだけで動く。NNUE評価関数は任意で、置かなければ classical 評価で走る（→[NNUE評価関数](#nnue評価関数)）。
+`engines/yaneuraou-nnue` があればそれを、無ければ `fairy-stockfish` を使う（`engine.py` の `default_engine()`）。
 
 動作確認は macOS のみ（`open` と `add.py` の `pbpaste` を使っている）。
 
@@ -56,7 +58,7 @@ python3 analyze.py games/xxx.kif --multipv 3
 出力例:
 
 ```
-エンジン: Fairy-Stockfish 14.0.1 XQ / NNUE (shogi-878ca61334a7.nnue)   movetime 1000ms   MultiPV 3
+エンジン: YaneuraOu NNUE 9.80git 64APPLEM1 / NNUE (suisho5)   movetime 1000ms   MultiPV 3
 
   手 指し手               評価値     損失    最善手          読み筋
  38 ６五桂打             +430    406?   7七角打         B*7g 5i4h 7g8h 5h8h 7f7g+ ...
@@ -115,7 +117,8 @@ python3 verify.py games/新しい棋譜.kif --at 34   # 盤面を出して画面
 | `stats.py` | 解析済みJSONを横断して平均損失などをまとめる |
 | `test_kif.py` | KIFパーサーの回帰テスト（エンジン不要、1秒） |
 | `games/` `out/` | 棋譜置き場 / 出力 |
-| `nnue/` | NNUE評価関数の置き場（152MBなのでgit管理外） |
+| `engines/` | やねうら王のバイナリと評価関数（`suisho5/nn.bin`）。git管理外 |
+| `nnue/` | Fairy-Stockfish 用のNNUE評価関数の置き場（152MBなのでgit管理外） |
 
 ### ビューアの設計メモ
 
@@ -175,10 +178,62 @@ KIFを食わせると出るので、テストで固定してある。
 
 ## エンジン
 
-`fairy-stockfish`（Homebrew: `brew install fairy-stockfish`）を使う。
-USIプロトコルに対応していて、`UCI_Variant=shogi` で将棋になる。Apple Siliconでそのまま動く。
+USIプロトコルで喋れるものなら何でもよいが、起動オプションの語彙がエンジンごとに違うので、
+`engine.py` は `id name` で見分けて出し分けている。対応は次の2つ。
 
-### NNUE評価関数
+### やねうら王 ＋ 水匠5（推奨）
+
+将棋専用のエンジンと評価関数。Fairy-Stockfish から替えたら、同じ対局で
+**棋神のグラフにかなり近い数字**になった（2026/09/11 の対局、先手視点）:
+
+| 手数 | Fairy-Stockfish | やねうら王＋水匠5 | 棋神（画面を目視） |
+|---|---|---|---|
+| 40 | −435 | −773 | −1500 |
+| 55 | +276 | +733 | +1300 |
+| 57 | −230 | −781 | −1500 |
+| 70 | −711 | −1481 | −2000 |
+| 80 | −1016 | −2164 | −2000 |
+
+Fairy の数字は探索を15秒に伸ばしても変わらなかったので、時間ではなくエンジンの差。
+形（どこで落ちるか）は Fairy でも合っていた。違うのは振れ幅。
+
+セットアップ（macOS / Apple Silicon）:
+
+```bash
+mkdir -p engines && cd engines
+git clone --depth 1 https://github.com/yaneurao/YaneuraOu
+cd YaneuraOu/source
+make -j normal COMPILER=clang++ TARGET_CPU=APPLEM1 YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE
+mv YaneuraOu-by-gcc ../../yaneuraou-nnue          # 🔑 名前を "yaneuraou" にしない（下記）
+cd ../..
+brew install sevenzip
+curl -sL -o Suisho5.7z https://github.com/yaneurao/YaneuraOu/releases/download/suisho5/Suisho5.7z
+7zz x -osuisho5 Suisho5.7z && rm Suisho5.7z         # → engines/suisho5/nn.bin（64MB）
+```
+
+`engines/` はまるごと git 管理外。評価関数は `engines/<名前>/nn.bin` を自動で探す
+（`find_eval_dir()`）。水匠5は [やねうら王のリリース](https://github.com/yaneurao/YaneuraOu/releases/tag/suisho5) にある。
+
+- 🔑 **バイナリを `engines/yaneuraou` という名前にしてはいけない。** macOS のファイルシステムは
+  大文字小文字を区別しないので、クローンした `YaneuraOu/` ディレクトリと同じ名前になり、
+  `mv` がディレクトリの中へ移動してしまう（「permission denied」で気づく）
+- 🔑 **`FV_SCALE` は評価値の物差しそのもの。** 既定16だが水匠5は24が推奨で、`engine.py` が設定している。
+  ここが違うと数字の大きさが全部変わる
+- 対局用の仕組み（定跡 `BookFile`、`NetworkDelay`、`MinimumThinkingTime`）は `engine.py` で全部切っている。
+  定跡を引くと探索せずに手を返してくるので評価値が出ない
+- 積めたかどうかは `isready` のときの `info string loading eval file : <path>` で確認している。
+  読めなければ `Error! : failed to read nn.bin` を出して落ちる（Fairy と違って黙って続けない）
+- **不正な手が混ざるとプロセスごと終了する**（`Illegal move`）。`verify.py` はこれも拾って、
+  どの手が疑わしいかを出す。Fairy の「黙って途中で止まる」とは逆の流儀
+- `--classical` は Fairy 専用。やねうら王のNNUE版は評価関数なしでは動かない
+
+### Fairy-Stockfish
+
+`fairy-stockfish`（Homebrew: `brew install fairy-stockfish`）。チェスの Stockfish を
+多ゲーム対応にしたもので、`UCI_Variant=shogi` で将棋になる。Apple Siliconでそのまま動く。
+手軽だが、将棋専用エンジンと比べると評価値の振れ幅が小さい（上の表）。
+
+#### NNUE評価関数
 
 `nnue/` に `*.nnue` を置いておくと自動で積む（`engine.py` の `find_nnue()`）。
 将棋用のネットは Fairy-Stockfish 公式の一覧から取る:
@@ -190,7 +245,7 @@ https://fairy-stockfish.github.io/nnue/   →  shogi-878ca61334a7.nnue（152MB�
 152MBあるのでリポジトリには入れていない（`.gitignore` 済み）。置かなければ
 評価関数なしの classical 評価で動く。明示的に切るなら `--classical`。
 
-### 🚨 積めたかどうかは、エンジン自身に名乗らせて確かめること
+#### 🚨 積めたかどうかは、エンジン自身に名乗らせて確かめること
 
 **評価関数ファイルとエンジンのNNUEアーキテクチャが合っていないと、エラーではなく
 無言で classical に落ちる。** ファイルが置いてあることは「積めた」の証拠にならない。
@@ -206,9 +261,14 @@ https://fairy-stockfish.github.io/nnue/   →  shogi-878ca61334a7.nnue（152MB�
 🔑 **この `info string` は `usi` でも `isready` でもなく、最初の `go` のときに出る。**
 起動直後に評価モードを知るために、`engine.py` は `go movetime 1` の空打ちを1回入れている。
 
-さらに精度を上げたいなら、やねうら王＋水匠に差し替える手もある（`--engine` でパスを渡す）。
-ただし `export.py` と `verify.py` は `d` コマンドの出力から `Sfen:` 行を拾っているので、
-エンジンを替えると**検算の層ごと壊れる**。差し替えるならそこも直すこと。
+### エンジンを替えるときの注意
+
+`d` コマンドの出力（盤面と SFEN の行）はエンジンごとに形が違う。`Engine.board()` に
+1か所にまとめてあるので、別のエンジンを足すならそこを直す。`export.py` と `verify.py` は
+それを通して**手数の検算**をしているので、ここが合わないと解析が始まらない（始まらないのは正しい）。
+
+🚨 **エンジンや評価関数を替えたら、`out/*.json` は全部解析し直すこと。** 評価値の物差しが
+変わるので、混ぜたまま `stats.py` で平均を取ると意味のない数字になる。
 
 ## 実装上の注意（ハマった点）
 

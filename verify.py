@@ -10,6 +10,9 @@ Stockfish系は `position startpos moves ...` に不正な手が混ざると、
 エンジンが報告する手数が期待値と一致することを確認して初めて、
 解析結果を信用できる。
 
+やねうら王は逆に、不正な手を見ると `Illegal move` と言って**プロセスごと終了する**。
+どちらの流儀でも「どの手が疑わしいか」を出せるように、エンジンが黙るのも拾う。
+
 新しい棋譜を解析する前にこれを通すこと。
 """
 
@@ -17,28 +20,20 @@ import argparse
 import sys
 
 import kif
-from engine import Engine
+from engine import Engine, default_engine
 
 
 def board_at(eng, moves):
     """指定手数までの局面を (盤面テキスト, SFEN) で返す。"""
-    eng._send("position startpos" + (" moves " + " ".join(moves) if moves else ""))
-    eng._send("d")
-    eng._send("isready")
-    lines, sfen = [], None
-    for l in eng._read_until("readyok"):
-        if l.startswith("Sfen:"):
-            sfen = l.split("Sfen:", 1)[1].strip()
-        elif l.startswith(("+---", " +---", " |", "|", "   a ")):
-            lines.append(l)
-    return "\n".join(lines), sfen
+    return eng.board(moves)
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("kiffile")
     ap.add_argument("--at", type=int, help="この手数の盤面を表示する")
-    ap.add_argument("--engine", default="fairy-stockfish")
+    ap.add_argument("--engine", default=default_engine(),
+                    help="USIエンジンのパス（既定: engines/yaneuraou-nnue があればそれ、無ければ fairy-stockfish）")
     args = ap.parse_args()
 
     header, moves = kif.parse(open(args.kiffile, encoding="utf-8").read())
@@ -49,7 +44,15 @@ def main():
     with Engine(args.engine) as eng:
         seen, dups = {}, []
         for i in range(len(usi) + 1):
-            _, sfen = board_at(eng, usi[:i])
+            try:
+                _, sfen = board_at(eng, usi[:i])
+            except RuntimeError:
+                # やねうら王は不正な手でプロセスごと落ちる。落ちた直前の手が犯人
+                print(f"✗ {i}手目でエンジンが終了した（不正な手を拒否）")
+                print(f"  疑わしい手: {moves[i - 1]['kif'] if i else '?'}"
+                      f" → {usi[i - 1] if i else '?'}")
+                ok = False
+                break
             if sfen is None:
                 print(f"✗ {i}手目: エンジンからSFENが取れない")
                 ok = False

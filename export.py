@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 import kif
-from engine import Engine, MATE_SCORE
+from engine import Engine, MATE_SCORE, default_engine
 
 CLAMP = 2000
 DUBIOUS, MISTAKE, BLUNDER = 150, 300, 500
@@ -29,8 +29,9 @@ def main():
     ap.add_argument("-o", "--out")
     ap.add_argument("--movetime", type=int, default=1500)
     ap.add_argument("--pv", type=int, default=12)
-    ap.add_argument("--engine", default="fairy-stockfish")
-    ap.add_argument("--eval-file", help="NNUE評価関数のパス（既定: nnue/*.nnue を自動検出）")
+    ap.add_argument("--engine", default=default_engine(),
+                    help="USIエンジンのパス（既定: engines/yaneuraou-nnue があればそれ、無ければ fairy-stockfish）")
+    ap.add_argument("--eval-file", help="評価関数のパス（既定: やねうら王は engines/*/nn.bin、Fairy は nnue/*.nnue を自動検出）")
     ap.add_argument("--classical", action="store_true",
                     help="NNUEを使わず classical 評価で解析する")
     ap.add_argument("--multipv", type=int, default=3,
@@ -49,13 +50,7 @@ def main():
             prefix = usi[:i]
 
             # 盤面(SFEN)を取る。ついでに手数が合っているかを検算する
-            eng._send("position startpos" + (" moves " + " ".join(prefix) if i else ""))
-            eng._send("d")
-            eng._send("isready")
-            sfen = None
-            for l in eng._read_until("readyok"):
-                if l.startswith("Sfen:"):
-                    sfen = l.split("Sfen:", 1)[1].strip()
+            _, sfen = eng.board(prefix)
             if sfen is None or int(sfen.rsplit(" ", 1)[1]) != i + 1:
                 sys.exit(f"✗ {i}手目で局面が食い違う。verify.py で確認すること")
 
@@ -117,7 +112,7 @@ def main():
             "engine": eng.name,
             "evalMode": eng.eval_mode,
             # 引数ではなく、エンジンが実際に積んだファイルを記録する
-            "evalFile": Path(eng.eval_file).name if eng.eval_file else "",
+            "evalFile": eng.eval_label(),
             "movetime": args.movetime,
             "multipv": args.multipv,
             "clamp": CLAMP,

@@ -13,7 +13,7 @@ import sys
 import time
 
 import kif
-from engine import Engine, MATE_SCORE
+from engine import Engine, MATE_SCORE, default_engine
 
 # 評価値の下落がこの幅を超えたら印をつける（単位: センチポーン）
 BLUNDER = 500
@@ -79,8 +79,9 @@ def main():
     ap.add_argument("--movetime", type=int, default=1000, help="1局面あたりの探索時間(ms)")
     ap.add_argument("--at", type=int, help="この手数の局面だけ詳しく見る")
     ap.add_argument("--pv", type=int, default=10, help="読み筋を何手表示するか")
-    ap.add_argument("--engine", default="fairy-stockfish")
-    ap.add_argument("--eval-file", help="NNUE評価関数のパス（既定: nnue/*.nnue を自動検出）")
+    ap.add_argument("--engine", default=default_engine(),
+                    help="USIエンジンのパス（既定: engines/yaneuraou-nnue があればそれ、無ければ fairy-stockfish）")
+    ap.add_argument("--eval-file", help="評価関数のパス（既定: やねうら王は engines/*/nn.bin、Fairy は nnue/*.nnue を自動検出）")
     ap.add_argument("--classical", action="store_true",
                     help="NNUEを使わず、評価関数なしの classical 評価で解析する")
     ap.add_argument("--multipv", type=int, default=1,
