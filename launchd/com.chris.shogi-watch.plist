@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  毎日19時に slack_watch.py を1回だけ走らせる。
+  ~/Library/LaunchAgents/ にコピーして bootstrap する（手順は README）。
+
+  ・Macが19時に寝ていた場合は、起きたタイミングで遅れて実行される（取りこぼさない）
+  ・WorkingDirectory を指定しないと launchd は cwd が / になる。
+    エンジン(engines/)も棋譜(games/)も相対で見ているので、ここは必須
+  ・PATH も profile 由来のものが無いので、明示しておく
+  ・ProcessType は付けない。Background にすると macOS がCPUを絞るので、
+    1局17分の解析がさらに伸びる
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.chris.shogi-watch</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/python3</string>
+        <string>/Users/takegawayusuke/claude/application/shogi-analyzer/slack_watch.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/takegawayusuke/claude/application/shogi-analyzer</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>19</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/takegawayusuke/claude/application/shogi-analyzer/out/slack_watch.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/takegawayusuke/claude/application/shogi-analyzer/out/slack_watch.log</string>
+</dict>
+</plist>

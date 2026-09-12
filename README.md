@@ -90,6 +90,60 @@ python3 analyze.py games/xxx.kif --multipv 3
 iPhoneでコピーしたものをMacで貼るには、ユニバーサルクリップボード（Handoff）が要る。
 うまく渡らない場合は、棋譜テキストを直接 `games/なまえ.kif` に保存してもよい。
 
+## Slackから自動で取り込む（毎日19時）
+
+iPhoneから公開チャンネル `#将棋` に棋譜を**本文として**貼っておくと、
+毎日19時にMacが勝手に拾って、保存→検算→解析→HTML化まで済ませる。
+
+```bash
+python3 slack_watch.py                    # 新着を1回見にいく（launchd が19時に叩く）
+python3 slack_watch.py --dry-run          # 拾うところまで。解析も投稿もしない
+python3 slack_watch.py --channel '#メモ'   # 別チャンネルで試す
+python3 slack_watch.py --movetime 3000    # 思考時間を変える（既定10000ms）
+```
+
+`launchd` への登録:
+
+```bash
+cp launchd/com.chris.shogi-watch.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.chris.shogi-watch.plist
+launchctl kickstart -p gui/$(id -u)/com.chris.shogi-watch   # 今すぐ試す
+tail -f out/slack_watch.log
+```
+
+19時にMacが寝ていても、起きたタイミングで遅れて実行されるので取りこぼさない。
+
+### 返信は出さない
+
+成功したときは ✅ のリアクションを付けるだけ。平均損失などの中身はログ（`out/slack_watch.log`）に残す。
+毎日3局ぶんの解析結果をSlackに流しても読まないため。
+
+ただし**こちらが手を打たないと記録が欠ける場合だけ**は本文で返す。
+19時のバッチは見ていないときに走るので、黙って失敗されると気づけない。
+
+| 返すもの | いつ |
+|---|---|
+| ⚠️ + 「本文として貼って」 | Slackがスニペット（添付）にしてしまったとき。Botに `files:read` が無いので読めない |
+| ⚠️ + 「途中で切れている」 | 終局の行が無いとき。長い棋譜はSlackが2通に割ることがある |
+| ❌ + エラー内容 | 検算に落ちた / エンジンが落ちたとき |
+
+### 設計の前提
+
+- **Slackは投函口であって保管庫ではない**。無料プランは90日で古いメッセージが見えなくなる。
+  原本は `games/*.kif`（git管理下）
+- どこまで処理したかは `out/slack_state.json` で覚える。✅ は人間向けの目印で、
+  読み返してはいない（Botに `reactions:read` が無い）
+- 🔑 **失敗した棋譜を飛び越さない。** 透かし（`oldest`）は「先頭から連続して片付いたところ」までしか
+  進めず、エンジンが落ちただけの対局は次回もう一度試す（3回で諦める）。
+  一律に進めてしまうと、19時に1局目が落ちただけでその対局が `games/` に残らないまま
+  二度と拾われなくなる。**指した記録が静かに欠けるのが一番まずい**
+- 棋譜だけ保存されていて解析結果が無い場合は、解析からやり直す（前回そこで落ちたとみなす）
+- 解析中はロック（`out/slack_watch.lock`）を取る。手で `export.py` を回しているときに
+  19時のバッチが重なっても、エンジンが2つ走らない
+- トークンはこのリポジトリに置かない。`~/claude/application/MCP/.env` の
+  `SLACK_BOT_TOKEN` を借りる（環境変数が優先）
+- Botが読めるのは**公開チャンネルだけ**。権限が `channels:history` しかないため
+
 ## 🚨 新しい棋譜は、まず検算を通すこと
 
 ```bash
@@ -106,7 +160,8 @@ python3 verify.py games/新しい棋譜.kif --at 34   # 盤面を出して画面
 
 | ファイル | 役割 |
 |---|---|
-| `add.py` | クリップボードのKIFを取り込む（検算まで自動） |
+| `add.py` | クリップボードのKIFを取り込む（検算まで自動）。保存部分は `slack_watch.py` からも呼ぶ |
+| `slack_watch.py` | Slackに貼られた棋譜を拾って解析まで回す（毎日19時） |
 | `kif.py` | KIF → USI 変換。依存ライブラリなし |
 | `engine.py` | USIエンジンのドライバ |
 | `analyze.py` | 解析本体（CLI出力） |
@@ -117,6 +172,7 @@ python3 verify.py games/新しい棋譜.kif --at 34   # 盤面を出して画面
 | `stats.py` | 解析済みJSONを横断して平均損失などをまとめる |
 | `test_kif.py` | KIFパーサーの回帰テスト（エンジン不要、1秒） |
 | `games/` `out/` | 棋譜置き場 / 出力 |
+| `launchd/` | 19時に `slack_watch.py` を回すための plist |
 | `engines/` | やねうら王のバイナリと評価関数（`suisho5/nn.bin`）。git管理外 |
 | `nnue/` | Fairy-Stockfish 用のNNUE評価関数の置き場（152MBなのでgit管理外） |
 
