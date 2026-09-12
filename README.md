@@ -102,16 +102,16 @@ python3 slack_watch.py --channel '#メモ'   # 別チャンネルで試す
 python3 slack_watch.py --movetime 3000    # 思考時間を変える（既定10000ms）
 ```
 
-`launchd` への登録:
+cron への登録（`crontab -e`）:
 
-```bash
-cp launchd/com.chris.shogi-watch.plist ~/Library/LaunchAgents/
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.chris.shogi-watch.plist
-launchctl kickstart -p gui/$(id -u)/com.chris.shogi-watch   # 今すぐ試す
-tail -f out/slack_watch.log
+```cron
+0 19 * * * cd /Users/takegawayusuke/claude/application/shogi-analyzer && /opt/homebrew/bin/python3 slack_watch.py >> /Users/takegawayusuke/cron/logs/shogi-watch.log 2>&1
 ```
 
-19時にMacが寝ていても、起きたタイミングで遅れて実行されるので取りこぼさない。
+cronはPATHもcwdも引き継がないので、`cd` とpythonの絶対パスは省略しない。
+
+19時にMacが寝ていると**その回は実行されない**（launchdと違い、起きても追いかけてこない）。
+ただし棋譜が失われることはない。処理済みの透かしが進んでいないので、翌日の19時にまとめて拾われる。
 
 ### 返信は出さない
 
@@ -172,7 +172,6 @@ python3 verify.py games/新しい棋譜.kif --at 34   # 盤面を出して画面
 | `stats.py` | 解析済みJSONを横断して平均損失などをまとめる |
 | `test_kif.py` | KIFパーサーの回帰テスト（エンジン不要、1秒） |
 | `games/` `out/` | 棋譜置き場 / 出力 |
-| `launchd/` | 19時に `slack_watch.py` を回すための plist |
 | `engines/` | やねうら王のバイナリと評価関数（`suisho5/nn.bin`）。git管理外 |
 | `nnue/` | Fairy-Stockfish 用のNNUE評価関数の置き場（152MBなのでgit管理外） |
 
