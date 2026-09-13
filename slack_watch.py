@@ -332,7 +332,8 @@ def main():
     ap.add_argument("--channel", default=os.environ.get("SHOGI_SLACK_CHANNEL", DEFAULT_CHANNEL))
     ap.add_argument("--movetime", type=int, default=10000,
                     help="1局面あたりの思考時間ms（既定10000。1日1回しか回さないので長く取る）")
-    ap.add_argument("--multipv", type=int, default=3)
+    ap.add_argument("--multipv", type=int, default=1,
+                    help="候補手の数（既定1。ビューアは1位の読み筋しか使わない）")
     ap.add_argument("--dry-run", action="store_true", help="拾うだけで解析も投稿もしない")
     ap.add_argument("--since", help="この ts より後を見る（'0' で取れる範囲の全部）")
     args = ap.parse_args()

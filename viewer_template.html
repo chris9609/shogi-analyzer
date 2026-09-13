@@ -106,6 +106,8 @@ header{display:flex;flex-wrap:wrap;gap:20px 32px;align-items:flex-end;
   content:"";position:absolute;right:-2.5px;bottom:-2.5px;width:5px;height:5px;
   border-radius:50%;background:var(--board-line)}
 .sq.last{background:var(--hi);box-shadow:inset 0 0 0 1.5px rgba(90,69,38,.5)}
+/* 読み筋を辿っているあいだは枠を金にして、本譜の局面と見分ける */
+.board.pv{border-color:var(--gold)}
 .koma{font-family:var(--mincho);font-weight:600;line-height:1;
   width:78%;height:88%;display:flex;align-items:center;justify-content:center;
   font-size:clamp(13px,2.4vw,20px);
@@ -133,14 +135,16 @@ header{display:flex;flex-wrap:wrap;gap:20px 32px;align-items:flex-end;
 .best.w .line,.best.w .ring{stroke:var(--gote)}  .best.w .head,.best.w .drop{fill:var(--gote)}
 
 /* ── controls ─────────────────────────── */
-.ctl{display:flex;align-items:center;gap:8px;margin-top:12px}
+/* 盤の幅(400px)に ♪ まで収める。gap と目盛りの最小幅で調整している */
+.ctl{display:flex;align-items:center;gap:6px;margin-top:12px}
 .ctl button{white-space:nowrap;flex:none}
 button{font:inherit;background:var(--surface);color:var(--ink);cursor:pointer;
   border:1px solid var(--rule-strong);border-radius:2px;padding:5px 10px;line-height:1}
 button:hover{border-color:var(--ink2)}
 button:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
-.ctl .ply{font-family:var(--mincho);font-size:15px;min-width:74px;text-align:center}
-input[type=range]{flex:1;accent-color:var(--gold);min-width:60px}
+.ctl .ply{font-family:var(--mincho);font-size:15px;min-width:64px;text-align:center;white-space:nowrap}
+.ctl .ply.pv{color:var(--gold);font-weight:600}
+input[type=range]{flex:1;accent-color:var(--gold);min-width:40px}
 button[aria-pressed="true"]{background:var(--gold);border-color:var(--gold);color:#fff}
 #sound.off{color:var(--muted);text-decoration:line-through}
 /* 棋神の一手と実際の手を並べる行。色に頼らず文字で分かるようにする */
@@ -156,6 +160,7 @@ button[aria-pressed="true"]{background:var(--gold);border-color:var(--gold);colo
 .kishin .cp{font-family:var(--mincho);font-weight:600;font-variant-numeric:tabular-nums}
 .kishin .same{color:var(--gold);font-weight:600}
 .kishin .g{font-family:var(--mincho);font-weight:700}
+.kishin #pvExit{font-size:11.5px;padding:3px 8px}
 
 /* ── chart ────────────────────────────── */
 .chartbox{padding:6px 14px 12px;position:relative}
@@ -174,18 +179,13 @@ svg{display:block;width:100%;height:auto;overflow:visible}
 .dl dd{margin:0;font-family:var(--mincho);font-size:15px}
 .dl dd.pv{font-family:var(--sans);font-size:12px;color:var(--ink2);
   line-height:1.75;word-break:break-all}
-/* 候補手。1位を濃く、2位以下を退かせて、目が最初に最善手へ行くようにする */
-.cands{display:grid;gap:8px}
-.cand{display:grid;grid-template-columns:14px 1fr auto;gap:4px 8px;align-items:baseline}
-.cand-n{font-size:10px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
-.cand-mv{font-family:var(--mincho);font-size:15px}
-.cand-cp{font-family:var(--mincho);font-size:14px;font-weight:600;
-  font-variant-numeric:tabular-nums}
-.cand-cp.b{color:var(--sente)} .cand-cp.w{color:var(--gote)}
-.cand-pv{grid-column:2/4;font-family:var(--sans);font-size:11.5px;color:var(--ink2);
-  line-height:1.7;word-break:break-all}
-.cand:not(.top) .cand-mv{font-size:14px;color:var(--ink2)}
-.cand:not(.top) .cand-pv{color:var(--muted)}
+/* 読み筋。1手ずつ押せる。辿った手を濃く、いま盤に出ている手に下線。先頭＝棋神の一手 */
+.dl dd.pv .m{cursor:pointer;border-radius:2px}
+.dl dd.pv .m:hover{background:var(--hi)}
+.dl dd.pv .m:first-child{font-family:var(--mincho);font-size:14px;color:var(--ink)}
+.dl dd.pv .m.done{color:var(--ink)}
+.dl dd.pv .m.cur{color:var(--ink);font-weight:600;
+  text-decoration:underline;text-decoration-color:var(--gold);text-underline-offset:3px}
 .big{font-family:var(--mincho);font-size:30px;font-weight:600;line-height:1}
 .big.b{color:var(--sente)} .big.w{color:var(--gote)}
 
@@ -245,8 +245,9 @@ svg{display:block;width:100%;height:auto;overflow:visible}
       <button id="sound" title="駒音を切り替え（M）">♪</button>
     </div>
     <div class="kishin">
-      <button id="kishin" title="棋神の一手を盤に出す（K）" aria-pressed="false">棋神</button>
+      <button id="kishin" title="棋神の一手を盤に出す（K）。▶ でその先の読み筋を辿る" aria-pressed="false">棋神</button>
       <span class="body" id="kishinLine"></span>
+      <button id="pvExit" title="本譜に戻る（Esc）" hidden>戻る</button>
     </div>
   </div>
 
@@ -264,7 +265,7 @@ svg{display:block;width:100%;height:auto;overflow:visible}
       <h2>この局面</h2>
       <div class="detail">
         <div class="dl"><dt>評価値</dt><dd><span class="big" id="dCp"></span> <span id="dSide" style="color:var(--muted);font-size:12px"></span></dd></div>
-        <div class="dl"><dt>候補手</dt><dd class="cands" id="dCands"></dd></div>
+        <div class="dl"><dt>読み筋</dt><dd class="pv" id="dLine"></dd></div>
       </div>
     </div>
 
@@ -372,16 +373,23 @@ function pvToJa(sfen, pv){
 const N = DATA.positions.length - 1;
 let ply = 0;
 let flipped = DATA.gote === ME;          // 自分が下に来るように
-let kishin = false;                      // 棋神の一手を盤に出すか
+// 棋神ON のあいだだけ入る。null なら OFF。
+// {moves: 読み筋のUSI列, states: 各手を指した後の局面（先頭は分岐点）, idx: 何手目まで進めたか}
+// idx 0 は本譜の局面そのもので、矢印が1手目を指す。▶ で1手ずつ指していく
+let pv = null;
 
 const $ = id => document.getElementById(id);
 const KAN = "一二三四五六七八九";
 
-function lastMoveSquare(p){              // USI の移動先 → [rank0, file0]
-  const mv = DATA.moves.find(m => m.n === p && !m.terminal);
-  if (!mv || !mv.usi) return null;
-  const u = mv.usi;
-  const dst = u.includes("*") ? u.slice(2,4) : u.slice(2,4);
+// いま盤に出す局面。読み筋の途中なら指した後の局面、そうでなければ本譜
+const viewState = () => pv ? pv.states[pv.idx] : parseSfen(DATA.positions[ply].sfen);
+// 直前に指した手の移動先 → [rank0, file0]。読み筋の分岐点では本譜の最終手を光らせたまま
+function lastMoveSquare(){
+  let u;
+  if (pv && pv.idx > 0) u = pv.moves[pv.idx - 1];
+  else { const mv = DATA.moves.find(m => m.n === ply && !m.terminal); u = mv && mv.usi; }
+  if (!u) return null;
+  const dst = u.slice(2, 4);
   const file = +dst[0], rank = dst.charCodeAt(1) - 96;
   return [rank - 1, 9 - file];
 }
@@ -429,10 +437,11 @@ function cellCenter(r, c){
 
 function renderBest(){
   const svg = $("best");
-  const p = DATA.positions[ply];
-  const u = kishin ? bestOf(p) : null;
+  // 矢印は読み筋の次の手。末尾まで進めたら消える
+  const u = pv ? pv.moves[pv.idx] : null;
   if (!u){ svg.setAttribute("class", "best"); return; }
-  svg.setAttribute("class", "best on " + (ply % 2 === 0 ? "b" : "w"));
+  const side = (ply + pv.idx) % 2 === 0 ? "b" : "w";
+  svg.setAttribute("class", "best on " + side);
   const [dr, dc] = sqIdx(u.slice(2, 4));
   const [dx, dy] = cellCenter(dr, dc);
   const ring = svg.querySelector(".ring");
@@ -446,7 +455,7 @@ function renderBest(){
     drop.setAttribute("visibility", "visible");
     drop.setAttribute("x", dx); drop.setAttribute("y", dy);
     // 盤上の駒と同じく、上側の手番の駒は逆さに置く
-    const upside = (ply % 2 === 1) !== flipped;
+    const upside = (side === "w") !== flipped;
     drop.setAttribute("transform", upside ? `rotate(180 ${dx} ${dy})` : "");
     drop.textContent = KANJI[u[0]];
     return;
@@ -472,7 +481,17 @@ function renderBest(){
 
 function renderKishinLine(){
   const box = $("kishinLine");
-  if (!kishin){ box.innerHTML = `<span class="hint">押すと、この局面での最善手を盤に出す</span>`; return; }
+  $("kishin").setAttribute("aria-pressed", !!pv);
+  $("pvExit").hidden = !(pv && pv.idx > 0);
+  if (!pv){ box.innerHTML = `<span class="hint">押すと、この局面での最善手を盤に出す。▶ でその先を辿れる</span>`; return; }
+  if (pv.idx > 0){                       // 読み筋の途中。いま指した手と、何手目か
+    const side = (ply + pv.idx - 1) % 2 === 0 ? "b" : "w";
+    box.innerHTML = `<span class="pair"><span class="k">読み筋</span>`
+      + `<span class="km ${side}">${usiToJa(pv.states[pv.idx - 1], pv.moves[pv.idx - 1])}</span>`
+      + `<span class="tnum" style="color:var(--muted)">${pv.idx} / ${pv.moves.length}</span></span>`
+      + `<span class="hint">◀ ▶ で進む · Esc で本譜へ</span>`;
+    return;
+  }
   const p = DATA.positions[ply];
   const side = ply % 2 === 0 ? "b" : "w";
   const u = bestOf(p);
@@ -490,14 +509,16 @@ function renderKishinLine(){
   }
   box.innerHTML = `<span class="pair"><span class="k">棋神の一手</span><span class="km ${side}">${bestJa}</span>`
     + `<span class="cp ${p.cp >= 0 ? "b" : "w"}">${fmtCp(p.cp)}</span></span>`
-    + `<span class="pair"><span class="k">実際</span>${actual}</span>`;
+    + `<span class="pair"><span class="k">実際</span>${actual}</span>`
+    + `<span class="hint">▶ で読み筋を辿る</span>`;
 }
 
 let shownFlip = null, shownHand = ["", ""];
 
 function renderBoard(){
-  const {board, hands} = parseSfen(DATA.positions[ply].sfen);
-  const hit = lastMoveSquare(ply);
+  const {board, hands} = viewState();
+  const hit = lastMoveSquare();
+  $("board").classList.toggle("pv", !!(pv && pv.idx > 0));
 
   // 筋・段の目盛りは盤を反転したときしか変わらない
   if (shownFlip !== flipped){
@@ -617,25 +638,21 @@ function markChart(){
 }
 
 /* ── 詳細と棋譜 ───────────────────────── */
-// 候補手。cp は先手視点（export.py で揃えてある）
-function candHtml(p){
-  const list = (p.candidates && p.candidates.length) ? p.candidates
-             : p.best ? [{move:p.best, cp:p.cp, pv:p.pv}] : [];
-  if (!list.length) return '<span style="color:var(--muted)">—</span>';
-  return list.map((c, i) => {
-    const line = c.pv && c.pv.length ? c.pv : (c.move ? [c.move] : []);
-    const ja = pvToJa(p.sfen, line);
-    const rest = ja.slice(1).join("　");
-    return `<div class="cand${i ? "" : " top"}">`
-      + `<span class="cand-n">${i + 1}</span>`
-      + `<span class="cand-mv">${ja[0] || "—"}</span>`
-      + `<span class="cand-cp ${c.cp >= 0 ? "b" : "w"}">${fmtCp(c.cp)}</span>`
-      + (rest ? `<div class="cand-pv">${rest}</div>` : "")
-      + `</div>`;
-  }).join("");
+// その局面の読み筋（USI列）。MultiPV 3 で解析した古いJSONは candidates[0] が同じもの
+const lineOf = p => (p.candidates && p.candidates.length && p.candidates[0].pv)
+                 || (p.pv && p.pv.length ? p.pv : (p.best ? [p.best] : []));
+
+// 読み筋を1手ずつ span にして、押した手まで一気に進められるようにする
+function lineHtml(p){
+  const ja = pvToJa(p.sfen, lineOf(p));
+  if (!ja.length) return '<span style="color:var(--muted)">—</span>';
+  return ja.map((t, k) => {
+    const cls = pv && k < pv.idx ? (k === pv.idx - 1 ? "m done cur" : "m done") : "m";
+    return `<span class="${cls}" data-k="${k}">${t}</span>`;
+  }).join("　");
 }
 
-let shownCands = "", curMv = null;
+let shownLine = "", curMv = null;
 
 function renderDetail(){
   const p = DATA.positions[ply];
@@ -643,9 +660,11 @@ function renderDetail(){
   $("dCp").textContent = fmtCp(p.cp);
   $("dCp").className = "big " + (p.cp >= 0 ? "b" : "w");
   $("dSide").textContent = `手番 ${side === "b" ? "▲先手" : "△後手"} · depth ${p.depth}`;
-  const ch = candHtml(p);
-  if (shownCands !== ch){ $("dCands").innerHTML = ch; shownCands = ch; }
-  $("plyLabel").textContent = ply + " / " + N;
+  const lh = lineHtml(p);
+  if (shownLine !== lh){ $("dLine").innerHTML = lh; shownLine = lh; }
+  const inLine = pv && pv.idx > 0;
+  $("plyLabel").textContent = inLine ? `+${pv.idx} / ${pv.moves.length}` : ply + " / " + N;
+  $("plyLabel").className = "ply tnum" + (inLine ? " pv" : "");
   $("slider").value = ply;
   const next = $("movelist").querySelector(`.mv[data-n="${ply}"]`);
   if (next !== curMv){
@@ -724,12 +743,45 @@ function setSound(on){
 
 function go(n, {silent = false} = {}){
   const to = Math.max(0, Math.min(N, n));
-  if (to !== ply && !silent) pachi();      // 局面が動いた時だけ鳴らす
+  const moved = to !== ply || (pv && pv.idx > 0);
+  if (moved && !silent) pachi();           // 局面が動いた時だけ鳴らす
   ply = to;
+  if (pv) pv = lineAt(ply);                // 棋神ONのまま本譜を動かしたら、新しい局面の読み筋の頭に
   renderBoard(); renderDetail(); renderKishinLine(); markChart();
   if (curMv) keepVisible(curMv);
   else $("movelist").scrollTop = 0;   // 開始局面に戻ったら棋譜欄も先頭へ
 }
+
+/* ── 棋神: 読み筋を盤で辿る ───────────── */
+// 局面 ply の読み筋を、全手分の局面ごと先に作っておく。以後は添字を動かすだけ。
+// グラフの印と棋譜欄は分岐点のまま動かさない（読み筋の途中の評価値は持っていない）
+function lineAt(ply, idx = 0){
+  const moves = lineOf(DATA.positions[ply]);
+  const states = [parseSfen(DATA.positions[ply].sfen)];
+  for (const u of moves){
+    const next = applyUsi(states.at(-1), u);
+    if (next === states.at(-1)) break;     // 壊れた手が来たらそこで読み筋を切る
+    states.push(next);
+  }
+  const usable = moves.slice(0, states.length - 1);
+  return {moves: usable, states, idx: Math.max(0, Math.min(usable.length, idx))};
+}
+function setKishin(on, idx = 0){
+  const before = pv ? pv.idx : 0;
+  pv = on ? lineAt(ply, idx) : null;
+  if ((pv ? pv.idx : 0) !== before) pachi();
+  renderBoard(); renderDetail(); renderKishinLine();
+}
+function stepPv(d){
+  const to = Math.max(0, Math.min(pv.moves.length, pv.idx + d));
+  if (to === pv.idx) return;
+  pv.idx = to;
+  pachi();
+  renderBoard(); renderDetail(); renderKishinLine();
+}
+// ◀ は読み筋の頭まで戻ったら本譜を1手戻す（棋神はONのまま）。▶ は棋神ONなら読み筋を進める
+const stepBack = () => pv && pv.idx ? stepPv(-1) : go(ply - 1);
+const stepFwd  = () => pv ? stepPv(1) : go(ply + 1);
 
 /* ── 起動 ─────────────────────────────── */
 $("sente").textContent = DATA.sente; $("senteRank").textContent = DATA.senteRank;
@@ -741,28 +793,31 @@ $("avgB").textContent = DATA.avgLoss.b; $("avgW").textContent = DATA.avgLoss.w;
 // 評価値のものさし。どのエンジン・評価モード・持ち時間で測ったかで数字の意味が変わる
 const EI = DATA.engineInfo;
 if (EI) $("eng").textContent =
-  `${EI.evalMode}${EI.evalFile ? " " + EI.evalFile : ""} · ${EI.movetime}ms`
-  + (EI.multipv > 1 ? ` · 候補${EI.multipv}手` : "");
+  `${EI.evalMode}${EI.evalFile ? " " + EI.evalFile : ""} · ${EI.movetime}ms`;
 $("slider").max = N;
 
 buildBoard(); renderChart(); renderMoves(); go(0, {silent: true});
 setSound(soundOn);
 
 $("first").onclick = () => go(0);
-$("prev").onclick  = () => go(ply - 1);
-$("next").onclick  = () => go(ply + 1);
+$("prev").onclick  = stepBack;
+$("next").onclick  = stepFwd;
 $("last").onclick  = () => go(N);
 $("slider").oninput = e => go(+e.target.value);
 $("flip").onclick = () => { flipped = !flipped; renderBoard(); };
 $("sound").onclick = () => setSound(!soundOn);
-$("kishin").onclick = () => {
-  kishin = !kishin;
-  $("kishin").setAttribute("aria-pressed", kishin);
-  renderBest(); renderKishinLine();
-};
+$("pvExit").onclick = () => setKishin(false);
+// 読み筋の中の手を押すと、棋神ONにしてその手まで一気に進める。
+// 読み筋欄は innerHTML を作り直すので、要素ではなく親で受ける
+$("dLine").addEventListener("click", e => {
+  const m = e.target.closest(".m");
+  if (m) setKishin(true, +m.dataset.k + 1);
+});
+$("kishin").onclick = () => setKishin(!pv);
 addEventListener("keydown", e => {
-  if (e.key === "ArrowLeft"){ go(ply - 1); e.preventDefault(); }
-  if (e.key === "ArrowRight"){ go(ply + 1); e.preventDefault(); }
+  if (e.key === "ArrowLeft"){ stepBack(); e.preventDefault(); }
+  if (e.key === "ArrowRight"){ stepFwd(); e.preventDefault(); }
+  if (e.key === "Escape"){ setKishin(false); }
   if (e.key === "k" || e.key === "K"){ $("kishin").click(); }
   if (e.key === "m" || e.key === "M"){ setSound(!soundOn); }
 });

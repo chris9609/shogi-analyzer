@@ -34,8 +34,9 @@ def main():
     ap.add_argument("--eval-file", help="評価関数のパス（既定: やねうら王は engines/*/nn.bin、Fairy は nnue/*.nnue を自動検出）")
     ap.add_argument("--classical", action="store_true",
                     help="NNUEを使わず classical 評価で解析する")
-    ap.add_argument("--multipv", type=int, default=3,
-                    help="候補手を何手まで残すか（既定3）")
+    ap.add_argument("--multipv", type=int, default=1,
+                    help="候補手を何手まで残すか（既定1。増やすと同じ時間での1位の読みが浅くなる。"
+                         "ビューアは1位しか使わない）")
     args = ap.parse_args()
 
     header, moves = kif.parse(Path(args.kiffile).read_text(encoding="utf-8"))
