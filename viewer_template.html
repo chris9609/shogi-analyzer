@@ -142,6 +142,7 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
 .ctl .ply{font-family:var(--mincho);font-size:15px;min-width:74px;text-align:center}
 input[type=range]{flex:1;accent-color:var(--gold);min-width:60px}
 button[aria-pressed="true"]{background:var(--gold);border-color:var(--gold);color:#fff}
+#sound.off{color:var(--muted);text-decoration:line-through}
 /* 棋神の一手と実際の手を並べる行。色に頼らず文字で分かるようにする */
 .kishin{margin-top:10px;padding:8px 10px;background:var(--sunk);border-radius:2px;
   font-size:12.5px;color:var(--ink2);display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline}
@@ -241,6 +242,7 @@ svg{display:block;width:100%;height:auto;overflow:visible}
       <button id="last" title="最終局面">▶|</button>
       <input type="range" id="slider" min="0" value="0">
       <button id="flip" title="盤を反転">⇅</button>
+      <button id="sound" title="駒音を切り替え（M）">♪</button>
     </div>
     <div class="kishin">
       <button id="kishin" title="棋神の一手を盤に出す（K）" aria-pressed="false">棋神</button>
@@ -679,8 +681,51 @@ function keepVisible(el){
   else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom;
 }
 
-function go(n){
-  ply = Math.max(0, Math.min(N, n));
+/* ── 駒音 ─────────────────────────────── */
+// 外部ファイルを持ち込まず Web Audio で「パチッ」を合成する。
+// 短い高域ノイズ（駒が盤に当たる瞬間）＋すぐ減衰する木の響き、の2層。
+// 数字は試聴して決めたもの（乾いた音: 響き20ms・アタック7.5kHz・低音ほぼ無し）
+let ac = null, soundOn = true, lastPachi = 0;
+try { soundOn = localStorage.getItem("shogi-sound") !== "off"; } catch {}
+function pachi(){
+  if (!soundOn) return;
+  const now = performance.now();
+  if (now - lastPachi < 45) return;          // スライダーを引きずった時に連射しすぎない
+  lastPachi = now;
+  try {
+    if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state === "suspended") ac.resume();
+  } catch { return; }
+  const t = ac.currentTime;
+  const out = ac.createGain(); out.gain.value = 0.46; out.connect(ac.destination);
+  const jit = 0.94 + Math.random() * 0.12;   // 毎回わずかに高さを変えて機械っぽさを消す
+  // アタック: 21ms のノイズを高域だけ通す
+  const len = Math.floor(ac.sampleRate * 0.021);
+  const buf = ac.createBuffer(1, len, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 6);
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 7500 * jit; bp.Q.value = 0.8;
+  src.connect(bp).connect(out); src.start(t); src.stop(t + 0.031);
+  // 木の響き: すぐ消える倍音を3本（低い620Hzはごく薄く）
+  [[1900, 0.60, 0.020], [3100, 0.30, 0.013], [620, 0.024, 0.014]].forEach(([f, g, dur]) => {
+    const o = ac.createOscillator(); o.type = "sine"; o.frequency.value = f * jit;
+    const og = ac.createGain();
+    og.gain.setValueAtTime(g, t); og.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(og).connect(out); o.start(t); o.stop(t + dur + 0.01);
+  });
+}
+function setSound(on){
+  soundOn = on;
+  $("sound").classList.toggle("off", !on);
+  $("sound").title = (on ? "駒音: ON" : "駒音: OFF") + "（M）";
+  try { localStorage.setItem("shogi-sound", on ? "on" : "off"); } catch {}
+}
+
+function go(n, {silent = false} = {}){
+  const to = Math.max(0, Math.min(N, n));
+  if (to !== ply && !silent) pachi();      // 局面が動いた時だけ鳴らす
+  ply = to;
   renderBoard(); renderDetail(); renderKishinLine(); markChart();
   if (curMv) keepVisible(curMv);
   else $("movelist").scrollTop = 0;   // 開始局面に戻ったら棋譜欄も先頭へ
@@ -700,7 +745,8 @@ if (EI) $("eng").textContent =
   + (EI.multipv > 1 ? ` · 候補${EI.multipv}手` : "");
 $("slider").max = N;
 
-buildBoard(); renderChart(); renderMoves(); go(0);
+buildBoard(); renderChart(); renderMoves(); go(0, {silent: true});
+setSound(soundOn);
 
 $("first").onclick = () => go(0);
 $("prev").onclick  = () => go(ply - 1);
@@ -708,6 +754,7 @@ $("next").onclick  = () => go(ply + 1);
 $("last").onclick  = () => go(N);
 $("slider").oninput = e => go(+e.target.value);
 $("flip").onclick = () => { flipped = !flipped; renderBoard(); };
+$("sound").onclick = () => setSound(!soundOn);
 $("kishin").onclick = () => {
   kishin = !kishin;
   $("kishin").setAttribute("aria-pressed", kishin);
@@ -717,6 +764,7 @@ addEventListener("keydown", e => {
   if (e.key === "ArrowLeft"){ go(ply - 1); e.preventDefault(); }
   if (e.key === "ArrowRight"){ go(ply + 1); e.preventDefault(); }
   if (e.key === "k" || e.key === "K"){ $("kishin").click(); }
+  if (e.key === "m" || e.key === "M"){ setSound(!soundOn); }
 });
 
 const tip = $("tip"), chart = $("chart");
