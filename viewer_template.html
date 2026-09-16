@@ -253,10 +253,10 @@ svg{display:block;width:100%;height:auto;overflow:visible}
 
   <div class="stack">
     <div class="card">
-      <h2>評価値 — 先手視点</h2>
+      <h2 id="chartHead">評価値</h2>
       <div class="chartbox">
         <svg id="chart" viewBox="0 0 720 260" role="img" aria-labelledby="chartTitle"></svg>
-        <p id="chartTitle" hidden>手数ごとの評価値の推移。上が先手優勢、下が後手優勢。</p>
+        <p id="chartTitle" hidden></p>
         <div class="tip" id="tip"></div>
       </div>
     </div>
@@ -373,6 +373,15 @@ function pvToJa(sfen, pv){
 const N = DATA.positions.length - 1;
 let ply = 0;
 let flipped = DATA.gote === ME;          // 自分が下に来るように
+// 🔑 自分がどちら側か。JSON の評価値は先手視点なので、自分が後手なら符号を返して
+// 「プラス＝自分が良い」に揃える。flipped は盤の向きを変えるボタンで動く一時的な
+// 状態なので、評価値の向きの根拠にはしない。自分が指していない棋譜は先手視点のまま
+const MY_SIDE = DATA.sente === ME ? "b" : DATA.gote === ME ? "w" : null;
+const POS_SIDE = MY_SIDE || "b";                 // 評価値がプラスのとき良いほう
+const NEG_SIDE = POS_SIDE === "b" ? "w" : "b";
+const SIGN = POS_SIDE === "w" ? -1 : 1;
+const myCp = cp => SIGN * cp;
+const cpSide = cp => myCp(cp) >= 0 ? POS_SIDE : NEG_SIDE;   // 色は「今良いほう」の側の色
 // 棋神ON のあいだだけ入る。null なら OFF。
 // {moves: 読み筋のUSI列, states: 各手を指した後の局面（先頭は分岐点）, idx: 何手目まで進めたか}
 // idx 0 は本譜の局面そのもので、矢印が1手目を指す。▶ で1手ずつ指していく
@@ -508,7 +517,7 @@ function renderKishinLine(){
       + (sym ? `<span class="g ${side}">${sym}</span>` : "");
   }
   box.innerHTML = `<span class="pair"><span class="k">棋神の一手</span><span class="km ${side}">${bestJa}</span>`
-    + `<span class="cp ${p.cp >= 0 ? "b" : "w"}">${fmtCp(p.cp)}</span></span>`
+    + `<span class="cp ${cpSide(p.cp)}">${fmtCp(p.cp)}</span></span>`
     + `<span class="pair"><span class="k">実際</span>${actual}</span>`
     + `<span class="hint">▶ で読み筋を辿る</span>`;
 }
@@ -571,7 +580,8 @@ const MATE = DATA.mateScore, CLAMP = DATA.clamp;
 const isMate = cp => Math.abs(cp) >= MATE - 1000;
 function fmtCp(cp){
   if (isMate(cp)) return (cp > 0 ? "▲詰" : "△詰") + (MATE - Math.abs(cp));
-  return (cp > 0 ? "+" : "") + cp;
+  const v = myCp(cp);
+  return (v > 0 ? "+" : "") + v;
 }
 const clampCp = cp => Math.max(-CLAMP, Math.min(CLAMP, cp));
 
@@ -586,7 +596,10 @@ const X = i => PAD.l + i / XMAX * iw;
 const Y = cp => PAD.t + (1 - (clampCp(cp) / CLAMP + 1) / 2) * ih;
 
 function renderChart(){
-  const pts = DATA.positions.map(p => [X(p.ply), Y(p.cp)]);
+  const who = MY_SIDE ? `${ME}（${MY_SIDE === "b" ? "▲先手" : "△後手"}）` : "▲先手";
+  $("chartHead").textContent = `評価値 — ${who}視点`;
+  $("chartTitle").textContent = `手数ごとの評価値の推移。上が${who}優勢、下が相手優勢。`;
+  const pts = DATA.positions.map(p => [X(p.ply), Y(myCp(p.cp))]);
   const line = pts.map((p,i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
   const zero = Y(0).toFixed(1);
 
@@ -630,7 +643,7 @@ function plyFromEvent(e){
 
 function markChart(){
   const p = DATA.positions[ply];
-  const x = X(ply), y = Y(p.cp);
+  const x = X(ply), y = Y(myCp(p.cp));
   const c = $("cross"), d = $("dot");
   if (!c) return;
   c.setAttribute("x1", x); c.setAttribute("x2", x); c.setAttribute("opacity", .8);
@@ -658,7 +671,7 @@ function renderDetail(){
   const p = DATA.positions[ply];
   const side = ply % 2 === 0 ? "b" : "w";
   $("dCp").textContent = fmtCp(p.cp);
-  $("dCp").className = "big " + (p.cp >= 0 ? "b" : "w");
+  $("dCp").className = "big " + cpSide(p.cp);
   $("dSide").textContent = `手番 ${side === "b" ? "▲先手" : "△後手"} · depth ${p.depth}`;
   const lh = lineHtml(p);
   if (shownLine !== lh){ $("dLine").innerHTML = lh; shownLine = lh; }
@@ -830,7 +843,7 @@ chart.addEventListener("pointermove", e => {
   const box = chart.parentElement.getBoundingClientRect();
   tip.innerHTML = `<div class="t-ply tnum">${n}手目まで</div>
     ${mv && !mv.terminal ? `<div class="t-mv">${mv.side === "b" ? "▲" : "△"}${mv.kif}</div>` : ""}
-    <div class="t-cp tnum" style="color:${p.cp >= 0 ? "var(--sente)" : "var(--gote)"}">${fmtCp(p.cp)}</div>`;
+    <div class="t-cp tnum" style="color:${cpSide(p.cp) === "b" ? "var(--sente)" : "var(--gote)"}">${fmtCp(p.cp)}</div>`;
   tip.style.opacity = 1;
   const rel = e.clientX - box.left;
   tip.style.left = Math.min(box.width - 130, Math.max(4, rel + 12)) + "px";
