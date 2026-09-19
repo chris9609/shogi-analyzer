@@ -161,6 +161,8 @@ python3 sync.py --all              # 全部送り直す（テーブルを作り�
 python3 build.py --web             # docs/game.html を作り直す（viewer_template.html を変えたとき）
 ```
 
+公開URL: **https://chris9609.github.io/shogi-analyzer/**（2026-09-19 に以下をすべて実施済み）
+
 初回だけ:
 
 1. Supabase ダッシュボードの SQL Editor に `schema.sql` を貼って実行（テーブル2つ＋RLS）
@@ -175,7 +177,6 @@ python3 build.py --web             # docs/game.html を作り直す（viewer_tem
    **401 か 403 なら正常。201 が返ったら公開してはいけない**（誰でも書ける状態）
 4. `python3 sync.py --all`
 5. `docs/index.html` を実プロジェクトで開いて、一覧・悪手の数・「痛かった手」が出ることを見る
-   （`games(sente,gote)` の埋め込みと `grade=in.(…)` はスタブでしか試していない）
 6. GitHub の Settings → Pages で Source を `main` / `docs` にする
 
 ### 設計の前提
