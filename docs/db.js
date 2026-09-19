@@ -6,6 +6,11 @@ export const SUPABASE_URL = "https://urkfxpdbavfvwthzjfgs.supabase.co";
 export const SUPABASE_KEY = "sb_publishable_uBfyx2CEbPVJbPNwbQDQLQ_p47PUVE_";
 export const ME = "christel09";
 
+// 公開ページには対局相手のIDを出さない。DBには本名(ID)のまま入っていて、伏せるのは表示だけ。
+// 自分(ME)は残す。手番の判定（sente === ME）が伏せたあとも効くように、ME は書き換えない
+export const OPPONENT = "相手";
+export const mask = name => (name === ME ? name : OPPONENT);
+
 export async function rest(path) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
@@ -35,5 +40,7 @@ export async function loadGame(id) {
   if (!id || !/^\d{8}_\d{4}$/.test(id)) throw new Error("URL に ?id=20260918_1130 の形で対局を指定してください");
   const rows = await rest(`games?id=eq.${id}&select=data`);
   if (!rows.length) throw new Error(`対局 ${id} は Supabase にありません（sync.py で送っていますか）`);
-  return rows[0].data;
+  const data = rows[0].data;
+  data.sente = mask(data.sente); data.gote = mask(data.gote);
+  return data;
 }

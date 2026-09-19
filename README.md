@@ -182,6 +182,8 @@ python3 build.py --web             # docs/game.html を作り直す（viewer_tem
 
 - **依存は増やしていない**。`sync.py` は標準ライブラリの `urllib` で PostgREST を直接叩く。
   ページ側も `fetch` だけで、supabase-js は読み込んでいない
+- **対局相手のIDは公開ページに出さない**。`docs/db.js` の `mask()` が自分（`ME`）以外を「相手」に置き換える。
+  DBには本名(ID)のまま入っていて、伏せるのは表示だけ。手番の判定は `ME` で行うので伏せても壊れない
 - **鍵の使い分け**。書き込みは Mac だけが持つ secret key（RLS を素通りする）。
   `docs/db.js` に書いてある publishable key は配る前提の公開鍵で、RLS により `select` しかできない
 - **`games.data` に export.py の JSON をまるごと持つ**。検討盤は 1局ぶんの JSON があれば動くので、

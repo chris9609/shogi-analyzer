@@ -126,7 +126,7 @@ h1{margin:0;font-family:var(--mincho);font-size:22px;font-weight:600;letter-spac
 </div>
 
 <script type="module">
-import { rest, restAll, ME } from "./db.js";
+import { rest, restAll, ME, mask } from "./db.js";
 const $ = id => document.getElementById(id);
 $("who").textContent = ME;
 
@@ -143,6 +143,9 @@ try {
     rest("games?select=id,played_at,sente,gote,sente_rank,gote_rank,winner,terminal,moves_count,avg_loss_b,avg_loss_w&order=played_at.desc"),
     restAll("moves?select=game_id,n,side,kif,loss,grade,games(sente,gote)&grade=in.(dubious,mistake,blunder)&order=loss.desc,game_id,n"),
   ]);
+  // 相手のIDは表示しない（db.js の mask）。自分かどうかの判定は ME が残るので変わらない
+  for (const g of games) { g.sente = mask(g.sente); g.gote = mask(g.gote); }
+  for (const m of bad) { m.games.sente = mask(m.games.sente); m.games.gote = mask(m.games.gote); }
 
   // 自分の手だけに絞る（相手の悪手は振り返りの対象ではない）
   const mine = bad.filter(m => (m.side === "b" ? m.games.sente : m.games.gote) === ME);
@@ -192,13 +195,13 @@ try {
   const worst = mine.slice(0, 10);
   $("worst").innerHTML = worst.length ? worst.map(m => {
     const g = games.find(x => x.id === m.game_id);
-    const opp = m.side === "b" ? m.games.gote : m.games.sente;
+    // 相手は伏せているので、どの対局かは日時で示す
     // ビューアの ply は「その手を指す前の局面」なので n-1 を開く
     return `<li>
       <span class="n tnum">${m.n}手目</span>
       <span class="mv ${m.side}">${m.side === "b" ? "▲" : "△"}${esc(m.kif)}</span>
       <span class="l tnum">−${m.loss}</span>
-      <a class="g" href="game.html?id=${m.game_id}&ply=${m.n - 1}">${g ? fmtDate(g.played_at) : ""} vs ${esc(opp)} →</a>
+      <a class="g" href="game.html?id=${m.game_id}&ply=${m.n - 1}">${g ? fmtDate(g.played_at) : ""} →</a>
     </li>`;
   }).join("") : `<li class="msg">まだありません</li>`;
 } catch (err) {
