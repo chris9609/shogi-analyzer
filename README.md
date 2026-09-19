@@ -144,6 +144,60 @@ cronはPATHもcwdも引き継がないので、`cd` とpythonの絶対パスは�
   `SLACK_BOT_TOKEN` を借りる（環境変数が優先）
 - Botが読めるのは**公開チャンネルだけ**。権限が `channels:history` しかないため
 
+## 公開ページ（Supabase ＋ GitHub Pages）
+
+解析結果を Supabase に置き、`docs/` の静的ページがそれを読む。
+iPhone からでも全対局の一覧と検討盤が見られる（解析そのものは Mac のエンジンがやる）。
+
+```
+Mac: export.py → out/*.json ──sync.py──▶ Supabase (games / moves)
+                                              ▲ 読むだけ（publishable key）
+GitHub Pages: docs/index.html（全対局・痛かった手） → docs/game.html?id=…（検討盤）
+```
+
+```bash
+python3 sync.py                    # out/ のうち Supabase にまだ無い局を送る（19時のバッチも最後にこれを呼ぶ）
+python3 sync.py --all              # 全部送り直す（テーブルを作り直したとき）
+python3 build.py --web             # docs/game.html を作り直す（viewer_template.html を変えたとき）
+```
+
+初回だけ:
+
+1. Supabase ダッシュボードの SQL Editor に `schema.sql` を貼って実行（テーブル2つ＋RLS）
+2. `~/claude/application/MCP/.env` に `SUPABASE_URL` と `SUPABASE_SECRET_KEY` を書く（リポジトリには置かない）
+3. 🚨 **公開鍵で書けないことを確かめる**（Supabase は新しいテーブルに anon の全権限を配るので、RLS だけが防波堤）:
+   ```bash
+   PUB=$(sed -n 's/^export const SUPABASE_KEY = "\(.*\)";/\1/p' docs/db.js)
+   curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "apikey: $PUB" -H "Authorization: Bearer $PUB" \
+     -H "Content-Type: application/json" -d '{"id":"rlstest","played_at":"2026-01-01T00:00:00+09:00","sente":"x","gote":"y","moves_count":0,"data":{}}' \
+     https://urkfxpdbavfvwthzjfgs.supabase.co/rest/v1/games
+   ```
+   **401 か 403 なら正常。201 が返ったら公開してはいけない**（誰でも書ける状態）
+4. `python3 sync.py --all`
+5. `docs/index.html` を実プロジェクトで開いて、一覧・悪手の数・「痛かった手」が出ることを見る
+   （`games(sente,gote)` の埋め込みと `grade=in.(…)` はスタブでしか試していない）
+6. GitHub の Settings → Pages で Source を `main` / `docs` にする
+
+### 設計の前提
+
+- **依存は増やしていない**。`sync.py` は標準ライブラリの `urllib` で PostgREST を直接叩く。
+  ページ側も `fetch` だけで、supabase-js は読み込んでいない
+- **鍵の使い分け**。書き込みは Mac だけが持つ secret key（RLS を素通りする）。
+  `docs/db.js` に書いてある publishable key は配る前提の公開鍵で、RLS により `select` しかできない
+- **`games.data` に export.py の JSON をまるごと持つ**。検討盤は 1局ぶんの JSON があれば動くので、
+  ページ用にデータの形を変えない。一覧と集計に要る列（対局者・勝敗・平均損失）だけ横に切り出してある。
+  `moves` は「全対局の中で一番痛かった手」のような横断集計のため
+- **KIF の原本も `games.kif` に入れる**。`out/*.json` は解析結果（派生物）なので、これが無いと
+  Mac の `games/` が唯一のコピーになる。入れたので `games/` は git 管理外（相手のIDを公開リポジトリに
+  残さない）。サンプル2局だけは `test_kif.py` が回すので残してある
+- **送信は「向こうに無いものを送る」方式で、状態ファイルを持たない**。送信に失敗しても
+  棋譜と解析結果は手元にあるので、翌日の実行で追いつく。Slack の透かしとは独立
+- 🚨 **無料枠の Supabase は7日無活動で pause する**（90日で削除）。クイズアプリのプロジェクトに
+  相乗りしていて、9/3 と 9/19 の2回止まった。`sync.py` は毎回一覧を読むので、19時のバッチが
+  毎日動いていれば止まらない。**止まったら ダッシュボード → Restore**（DNS が NXDOMAIN になるのが症状）
+- `build.py --web` は JSON を埋め込む代わりに `<script type="module">` ＋ top-level `await` で
+  `docs/db.js` の `loadGame()` を呼ぶ。`?ply=N` で途中の局面から開ける（一覧の「痛かった手」用）
+
 ## 🚨 新しい棋譜は、まず検算を通すこと
 
 ```bash
@@ -170,8 +224,11 @@ python3 verify.py games/新しい棋譜.kif --at 34   # 盤面を出して画面
 | `build.py` | テンプレート＋JSON → 単体HTML。`--bare` でArtifact公開用。タイトルに対局者名が入る |
 | `verify.py` | KIF→USI変換の検算 |
 | `stats.py` | 解析済みJSONを横断して平均損失などをまとめる |
+| `sync.py` | `out/*.json` を Supabase へ送る（標準ライブラリのみ） |
+| `schema.sql` | Supabase のテーブル定義（SQL Editor に貼る） |
+| `docs/` | GitHub Pages で公開するページ。`index.html`（全対局）・`game.html`（`build.py --web` の出力）・`db.js`（設定と読み取り） |
 | `test_kif.py` | KIFパーサーの回帰テスト（エンジン不要、1秒） |
-| `games/` `out/` | 棋譜置き場 / 出力 |
+| `games/` `out/` | 棋譜置き場 / 出力。どちらも git 管理外（原本は Supabase の `games.kif`、サンプル2局のみ残す） |
 | `engines/` | やねうら王のバイナリと評価関数（`suisho5/nn.bin`）。git管理外 |
 | `nnue/` | Fairy-Stockfish 用のNNUE評価関数の置き場（152MBなのでgit管理外） |
 

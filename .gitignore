@@ -3,3 +3,8 @@ __pycache__/
 out/
 nnue/
 engines/
+# 棋譜の原本は Supabase(games.kif) に入るので git には置かない（相手のIDが公開リポジトリに残らないように）。
+# サンプル2局だけは test_kif.py が回すので残す
+games/
+!games/20260830_0023.kif
+!games/20260901_1056.kif

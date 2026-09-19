@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>棋譜検討盤 — 全対局</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;600;700&display=swap">
+<style>
+/* 配色・書体は viewer_template.html と同じトークン */
+:root{
+  --bg:#F7F7F4; --surface:#FFFFFF; --sunk:#F1F1EC;
+  --ink:#1A1A18; --ink2:#55554F; --muted:#8E8E86;
+  --rule:#E3E3DC; --rule-strong:#C9C9C0;
+  --sente:#1D6FB8; --gote:#C0402F; --gold:#B8892B;
+  --sente-soft:rgba(29,111,184,.13); --gote-soft:rgba(192,64,47,.13);
+  --win:#2E7D4F; --lose:#C0402F;
+  --shadow:0 1px 2px rgba(26,26,24,.06),0 8px 24px -12px rgba(26,26,24,.14);
+  --mincho:"Shippori Mincho","Hiragino Mincho ProN","Yu Mincho",serif;
+  --sans:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#17171A; --surface:#1F1F23; --sunk:#141417;
+  --ink:#EDEDE7; --ink2:#B0B0A8; --muted:#7C7C76;
+  --rule:#32323A; --rule-strong:#4A4A54;
+  --sente-soft:rgba(29,111,184,.22); --gote-soft:rgba(192,64,47,.22);
+  --win:#5DBA85; --lose:#F0554A;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
+}}
+:root[data-theme="dark"]{
+  --bg:#17171A; --surface:#1F1F23; --sunk:#141417;
+  --ink:#EDEDE7; --ink2:#B0B0A8; --muted:#7C7C76;
+  --rule:#32323A; --rule-strong:#4A4A54;
+  --sente-soft:rgba(29,111,184,.22); --gote-soft:rgba(192,64,47,.22);
+  --win:#5DBA85; --lose:#F0554A;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+  font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:960px;margin:0 auto;padding:28px 16px 56px}
+.tnum{font-variant-numeric:tabular-nums}
+a{color:inherit}
+
+header{display:flex;flex-wrap:wrap;gap:16px 32px;align-items:flex-end;
+  padding-bottom:18px;border-bottom:1px solid var(--rule-strong);margin-bottom:22px}
+h1{margin:0;font-family:var(--mincho);font-size:22px;font-weight:600;letter-spacing:.01em}
+.sub{font-size:12px;color:var(--muted);letter-spacing:.03em;margin-top:2px}
+.stats{margin-left:auto;display:flex;gap:22px;flex-wrap:wrap}
+.stat{text-align:right}
+.stat .k{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font-family:var(--mincho);font-size:24px;font-weight:600;line-height:1.15}
+.stat .v small{font-size:12px;color:var(--muted);font-family:var(--sans);font-weight:400}
+
+.card{background:var(--surface);border:1px solid var(--rule);border-radius:3px;
+  box-shadow:var(--shadow);margin-bottom:22px}
+.card h2{margin:0;padding:11px 14px;font-size:11px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted);font-weight:600;border-bottom:1px solid var(--rule)}
+
+/* 対局一覧：1行＝1局。狭い画面では列を畳む */
+.games{display:grid;grid-template-columns:auto 1fr auto auto auto auto;align-items:center}
+.games>a,.games>.h{display:contents}
+.games>.h>span{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+  padding:8px 10px;border-bottom:1px solid var(--rule)}
+.games>a>span{padding:9px 10px;border-bottom:1px solid var(--rule);white-space:nowrap}
+.games>a:last-child>span{border-bottom:0}
+.games>a{text-decoration:none}
+.games>a:hover>span{background:var(--sunk)}
+.games .d{font-size:12px;color:var(--ink2)}
+.games .opp{font-family:var(--mincho);font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.games .opp small{font-size:11px;color:var(--muted);font-family:var(--sans);font-weight:400;margin-left:6px}
+.games .mk{font-family:var(--mincho);font-size:15px}
+.games .mk.b{color:var(--sente)} .games .mk.w{color:var(--gote)}
+.games .res{font-family:var(--mincho);font-weight:700;text-align:center}
+.games .res.win{color:var(--win)} .games .res.lose{color:var(--lose)} .games .res.draw{color:var(--muted)}
+.games .loss{text-align:right}
+.games .bad{font-family:var(--mincho);font-weight:700;color:var(--gote);text-align:right;font-size:13px}
+.games .bad .q{opacity:.55}
+@media(max-width:560px){
+  .games{grid-template-columns:1fr auto auto auto}
+  .games .d,.games .bad{display:none}
+  .games .opp small{display:block;margin:0}
+}
+
+/* 痛かった手 */
+.worst{list-style:none;margin:0;padding:0}
+.worst li{display:flex;align-items:baseline;gap:12px;padding:9px 14px;border-bottom:1px solid var(--rule)}
+.worst li:last-child{border-bottom:0}
+.worst .n{font-size:11px;color:var(--muted);width:56px;flex:none}
+.worst .mv{font-family:var(--mincho);font-size:16px;font-weight:600}
+.worst .mv.b{color:var(--sente)} .worst .mv.w{color:var(--gote)}
+.worst .l{margin-left:auto;font-family:var(--mincho);font-weight:700;color:var(--gote)}
+.worst .g{font-size:12px;color:var(--muted);text-decoration:none;white-space:nowrap}
+.worst .g:hover{color:var(--ink)}
+
+.note{font-size:11px;color:var(--muted);padding:9px 14px;border-top:1px solid var(--rule);line-height:1.6}
+.msg{padding:32px 14px;color:var(--ink2);text-align:center}
+.msg.err{color:var(--gote)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <h1>棋譜検討盤</h1>
+    <div class="sub"><span id="who"></span> の将棋ウォーズ 全対局 · やねうら王＋水匠5で解析</div>
+  </div>
+  <div class="stats" id="stats" hidden>
+    <div class="stat"><div class="k">対局</div><div class="v tnum" id="sGames"></div></div>
+    <div class="stat"><div class="k">勝率</div><div class="v tnum" id="sWin"></div></div>
+    <div class="stat"><div class="k">平均損失 <small>直近10局</small></div><div class="v tnum" id="sLoss"></div></div>
+  </div>
+</header>
+
+<div class="card">
+  <h2>対局</h2>
+  <div class="games" id="games"><div class="msg">読み込み中…</div></div>
+  <p class="note">平均損失＝1手あたりに失った評価値（自分の手番のみ）。
+  <b>?!</b> 疑問手（150〜）／<b>?</b> 悪手（300〜）／<b>??</b> 大悪手（500〜）の数。</p>
+</div>
+
+<div class="card">
+  <h2>痛かった手</h2>
+  <ul class="worst" id="worst"><li class="msg">読み込み中…</li></ul>
+  <p class="note">自分の手の中で損失が大きかった順。押すとその局面が開く。</p>
+</div>
+</div>
+
+<script type="module">
+import { rest, restAll, ME } from "./db.js";
+const $ = id => document.getElementById(id);
+$("who").textContent = ME;
+
+const mySide = g => g.sente === ME ? "b" : g.gote === ME ? "w" : null;
+const fmtDate = iso => {
+  const d = new Date(iso);
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+try {
+  // 一覧に要る列だけ取る（data は1局50KBあるので、ここでは読まない）
+  const [games, bad] = await Promise.all([
+    rest("games?select=id,played_at,sente,gote,sente_rank,gote_rank,winner,terminal,moves_count,avg_loss_b,avg_loss_w&order=played_at.desc"),
+    restAll("moves?select=game_id,n,side,kif,loss,grade,games(sente,gote)&grade=in.(dubious,mistake,blunder)&order=loss.desc,game_id,n"),
+  ]);
+
+  // 自分の手だけに絞る（相手の悪手は振り返りの対象ではない）
+  const mine = bad.filter(m => (m.side === "b" ? m.games.sente : m.games.gote) === ME);
+  const counts = {};
+  for (const m of mine) {
+    const c = counts[m.game_id] ??= { dubious: 0, mistake: 0, blunder: 0 };
+    c[m.grade]++;
+  }
+
+  // ── 一覧 ──
+  const rows = games.map(g => {
+    const me = mySide(g);
+    const opp = me === "b" ? g.gote : g.sente;
+    const oppRank = me === "b" ? g.gote_rank : g.sente_rank;
+    const res = !g.winner ? "draw" : g.winner === me ? "win" : "lose";
+    const resLabel = { win: "○", lose: "●", draw: "△" }[res];
+    const loss = me === "b" ? g.avg_loss_b : me === "w" ? g.avg_loss_w : g.avg_loss_b;
+    const c = counts[g.id] || {};
+    const badMarks = [c.blunder && `${c.blunder}<span class="q">??</span>`,
+                      c.mistake && `${c.mistake}<span class="q">?</span>`,
+                      c.dubious && `${c.dubious}<span class="q">?!</span>`].filter(Boolean).join(" ");
+    return `<a href="game.html?id=${g.id}" title="${esc(g.terminal || "")} ${g.moves_count}手">
+      <span class="d tnum">${fmtDate(g.played_at)}</span>
+      <span class="opp">${esc(opp)}<small>${esc(oppRank || "")}</small></span>
+      <span class="mk ${me || ""}">${me === "b" ? "▲" : me === "w" ? "△" : "–"}</span>
+      <span class="res ${res}">${resLabel}</span>
+      <span class="loss tnum">${loss}</span>
+      <span class="bad">${badMarks || "<span class='q'>—</span>"}</span>
+    </a>`;
+  });
+  $("games").innerHTML = games.length
+    ? `<div class="h"><span>日時</span><span>相手</span><span>手番</span><span>結果</span><span style="text-align:right">損失</span><span style="text-align:right">悪手</span></div>` + rows.join("")
+    : `<div class="msg">まだ対局がありません（Mac で python3 sync.py）</div>`;
+
+  // ── まとめ ──
+  const played = games.filter(mySide);
+  const wins = played.filter(g => g.winner === mySide(g)).length;
+  const recent = played.slice(0, 10);
+  const avg = recent.length
+    ? Math.round(recent.reduce((s, g) => s + (mySide(g) === "b" ? g.avg_loss_b : g.avg_loss_w), 0) / recent.length) : 0;
+  $("sGames").textContent = played.length;
+  $("sWin").innerHTML = played.length ? `${Math.round(wins / played.length * 100)}<small>%</small>` : "–";
+  $("sLoss").textContent = avg;
+  $("stats").hidden = false;
+
+  // ── 痛かった手 ──
+  const worst = mine.slice(0, 10);
+  $("worst").innerHTML = worst.length ? worst.map(m => {
+    const g = games.find(x => x.id === m.game_id);
+    const opp = m.side === "b" ? m.games.gote : m.games.sente;
+    // ビューアの ply は「その手を指す前の局面」なので n-1 を開く
+    return `<li>
+      <span class="n tnum">${m.n}手目</span>
+      <span class="mv ${m.side}">${m.side === "b" ? "▲" : "△"}${esc(m.kif)}</span>
+      <span class="l tnum">−${m.loss}</span>
+      <a class="g" href="game.html?id=${m.game_id}&ply=${m.n - 1}">${g ? fmtDate(g.played_at) : ""} vs ${esc(opp)} →</a>
+    </li>`;
+  }).join("") : `<li class="msg">まだありません</li>`;
+} catch (err) {
+  $("games").innerHTML = `<div class="msg err">${esc(err.message)}</div>`;
+  $("worst").innerHTML = "";
+  console.error(err);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,873 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>棋譜検討盤</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;600;700&display=swap">
+<style>
+:root{
+  --bg:#F7F7F4; --surface:#FFFFFF; --sunk:#F1F1EC;
+  --ink:#1A1A18; --ink2:#55554F; --muted:#8E8E86;
+  --rule:#E3E3DC; --rule-strong:#C9C9C0;
+  --sente:#1D6FB8; --gote:#C0402F; --gold:#B8892B;
+  --sente-soft:rgba(29,111,184,.13); --gote-soft:rgba(192,64,47,.13);
+  --hi:rgba(214,150,32,.34);
+  --chart:#D9342B; --grid:#D5D5CC;
+  /* 盤（榧）と駒（黄楊）。実物の色から起こしている */
+  --board:#EBCA8E; --board-2:#E1BB79; --board-line:#5A4526; --board-frame:#8A6234;
+  --koma:#F7E4B8; --koma-hi:#F8E7C1; --koma-edge:#C9A566; --koma-ink:#241C12; --koma-pro:#A8342A;
+  --shadow:0 1px 2px rgba(26,26,24,.06),0 8px 24px -12px rgba(26,26,24,.14);
+  --mincho:"Shippori Mincho","Hiragino Mincho ProN","Yu Mincho",serif;
+  --sans:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#17171A; --surface:#1F1F23; --sunk:#141417;
+  --ink:#EDEDE7; --ink2:#B0B0A8; --muted:#7C7C76;
+  --rule:#32323A; --rule-strong:#4A4A54;
+  --sente-soft:rgba(29,111,184,.22); --gote-soft:rgba(192,64,47,.22);
+  --hi:rgba(255,206,84,.34);
+  --chart:#F0554A; --grid:#3A3A44;
+  --board:#BE9459; --board-2:#B2874B; --board-line:#3B2B15; --board-frame:#6B4E28;
+  --koma:#EBD4A6; --koma-hi:#EDD9B1; --koma-edge:#8A6B3C; --koma-ink:#241C12; --koma-pro:#93291E;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
+}}
+:root[data-theme="dark"]{
+  --bg:#17171A; --surface:#1F1F23; --sunk:#141417;
+  --ink:#EDEDE7; --ink2:#B0B0A8; --muted:#7C7C76;
+  --rule:#32323A; --rule-strong:#4A4A54;
+  --sente-soft:rgba(29,111,184,.22); --gote-soft:rgba(192,64,47,.22);
+  --hi:rgba(255,206,84,.34);
+  --chart:#F0554A; --grid:#3A3A44;
+  --board:#BE9459; --board-2:#B2874B; --board-line:#3B2B15; --board-frame:#6B4E28;
+  --koma:#EBD4A6; --koma-hi:#EDD9B1; --koma-edge:#8A6B3C; --koma-ink:#241C12; --koma-pro:#93291E;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);
+  font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1160px;margin:0 auto;padding:28px 20px 56px}
+.tnum{font-variant-numeric:tabular-nums}
+
+/* ── header ───────────────────────────── */
+header{display:flex;flex-wrap:wrap;gap:20px 32px;align-items:flex-end;
+  padding-bottom:18px;border-bottom:1px solid var(--rule-strong);margin-bottom:22px}
+.players{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.pl{display:flex;align-items:baseline;gap:7px}
+.pl .mk{font-family:var(--mincho);font-size:17px;line-height:1}
+.pl.b .mk{color:var(--sente)} .pl.w .mk{color:var(--gote)}
+.pl .nm{font-family:var(--mincho);font-size:21px;font-weight:600;letter-spacing:.01em}
+.pl .rk{font-size:12px;color:var(--muted)}
+.vs{color:var(--muted);font-size:13px}
+.meta{font-size:12px;color:var(--muted);letter-spacing:.03em;
+  display:flex;gap:14px;flex-wrap:wrap}
+.stats{margin-left:auto;display:flex;gap:22px}
+.stat{text-align:right}
+.stat .k{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font-family:var(--mincho);font-size:24px;font-weight:600;line-height:1.15}
+.stat.b .v{color:var(--sente)} .stat.w .v{color:var(--gote)}
+
+/* ── layout ───────────────────────────── */
+.grid{display:grid;grid-template-columns:minmax(0,400px) minmax(0,1fr);gap:26px;align-items:start}
+@media(max-width:880px){.grid{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--rule);border-radius:3px;
+  box-shadow:var(--shadow)}
+.card h2{margin:0;padding:11px 14px;font-size:11px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted);font-weight:600;
+  border-bottom:1px solid var(--rule)}
+
+/* ── board ────────────────────────────── */
+.boardcard{padding:16px}
+.hand{display:flex;align-items:center;gap:8px;min-height:34px;font-family:var(--mincho);
+  font-size:15px;flex-wrap:wrap}
+.hand .lab{font-size:10px;letter-spacing:.1em;color:var(--muted);
+  font-family:var(--sans);min-width:52px}
+.hand.b .pc{color:var(--sente)} .hand.w .pc{color:var(--gote)}
+.hand .pc{border:1px solid currentColor;border-radius:2px;padding:1px 5px;font-size:13px}
+.hand .pc sub{font-size:10px;vertical-align:baseline;margin-left:1px}
+.hand .none{color:var(--muted);font-size:12px;font-family:var(--sans)}
+.boardbox{position:relative;margin:10px 0}
+.files,.ranks{position:absolute;display:grid;color:var(--ink2);font-size:10px;
+  font-family:var(--mincho)}
+.files{top:-15px;left:0;right:0;grid-template-columns:repeat(9,1fr);text-align:center}
+.ranks{top:0;bottom:0;right:-14px;grid-template-rows:repeat(9,1fr);
+  align-items:center;text-align:center;width:12px}
+.board{display:grid;grid-template-columns:repeat(9,1fr);
+  grid-template-rows:repeat(9,1fr);aspect-ratio:1;position:relative;
+  border:5px solid var(--board-frame);
+  /* 木目は柾目を薄く重ねるだけ。写真テクスチャは使わない */
+  background:
+    repeating-linear-gradient(93deg,rgba(90,69,38,.05) 0 1px,transparent 1px 7px),
+    repeating-linear-gradient(87deg,rgba(255,255,255,.05) 0 1px,transparent 1px 13px),
+    linear-gradient(158deg,var(--board) 0%,var(--board-2) 52%,var(--board) 100%);
+  box-shadow:inset 0 0 0 1.5px var(--board-line),inset 0 0 22px rgba(90,69,38,.16),var(--shadow)}
+.sq{border-right:.5px solid var(--board-line);border-bottom:.5px solid var(--board-line);
+  display:flex;align-items:center;justify-content:center;position:relative}
+.sq:nth-child(9n){border-right:none}
+.sq:nth-child(n+73){border-bottom:none}
+/* 星（4つの交点）。3四・3六・6四・6六の角に打つ */
+.sq:nth-child(21)::before,.sq:nth-child(24)::before,
+.sq:nth-child(48)::before,.sq:nth-child(51)::before{
+  content:"";position:absolute;right:-2.5px;bottom:-2.5px;width:5px;height:5px;
+  border-radius:50%;background:var(--board-line)}
+.sq.last{background:var(--hi);box-shadow:inset 0 0 0 1.5px rgba(90,69,38,.5)}
+/* 読み筋を辿っているあいだは枠を金にして、本譜の局面と見分ける */
+.board.pv{border-color:var(--gold)}
+.koma{font-family:var(--mincho);font-weight:600;line-height:1;
+  width:78%;height:88%;display:flex;align-items:center;justify-content:center;
+  font-size:clamp(13px,2.4vw,20px);
+  clip-path:polygon(50% 0,88% 16%,100% 100%,0 100%,12% 16%);
+  border:0;color:var(--koma-ink);
+  background:linear-gradient(168deg,var(--koma-hi) 0%,var(--koma) 46%,var(--koma-edge) 100%);
+  filter:drop-shadow(0 1px 1.5px rgba(60,40,15,.45))}
+.koma.w{transform:rotate(180deg)}
+.koma.pro{color:var(--koma-pro)}
+.koma[hidden]{display:none}
+.koma.two{font-size:clamp(8px,1.5vw,12px);writing-mode:vertical-rl;letter-spacing:-.08em}
+/* 棋神の一手。盤の上に1枚だけ SVG を重ね、手を送るたびに属性だけ書き換える。
+   inset:0 は枠（border）の内側＝9×9のマス目そのものに合う */
+/* 🔑 SVG 要素には hidden プロパティが無い（svg.hidden=true は属性にならない）。クラスで出し入れする */
+.best{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;display:none}
+.best.on{display:block}
+.best .halo{stroke:var(--koma-hi);stroke-width:.34;stroke-linecap:round;opacity:.92;fill:none}
+.best .line{stroke-width:.15;stroke-linecap:round;fill:none}
+.best .head{stroke:var(--koma-hi);stroke-width:.06;stroke-linejoin:round}
+.best .ring{fill:none;stroke-width:.11}
+.best .drop{font-family:var(--mincho);font-weight:600;font-size:.52px;
+  text-anchor:middle;dominant-baseline:central;
+  paint-order:stroke;stroke:var(--koma-hi);stroke-width:.14;stroke-linejoin:round}
+.best.b .line,.best.b .ring{stroke:var(--sente)} .best.b .head,.best.b .drop{fill:var(--sente)}
+.best.w .line,.best.w .ring{stroke:var(--gote)}  .best.w .head,.best.w .drop{fill:var(--gote)}
+
+/* ── controls ─────────────────────────── */
+/* 盤の幅(400px)に ♪ まで収める。gap と目盛りの最小幅で調整している */
+.ctl{display:flex;align-items:center;gap:6px;margin-top:12px}
+.ctl button{white-space:nowrap;flex:none}
+button{font:inherit;background:var(--surface);color:var(--ink);cursor:pointer;
+  border:1px solid var(--rule-strong);border-radius:2px;padding:5px 10px;line-height:1}
+button:hover{border-color:var(--ink2)}
+button:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
+.ctl .ply{font-family:var(--mincho);font-size:15px;min-width:64px;text-align:center;white-space:nowrap}
+.ctl .ply.pv{color:var(--gold);font-weight:600}
+input[type=range]{flex:1;accent-color:var(--gold);min-width:40px}
+button[aria-pressed="true"]{background:var(--gold);border-color:var(--gold);color:#fff}
+#sound.off{color:var(--muted);text-decoration:line-through}
+/* 棋神の一手と実際の手を並べる行。色に頼らず文字で分かるようにする */
+.kishin{margin-top:10px;padding:8px 10px;background:var(--sunk);border-radius:2px;
+  font-size:12.5px;color:var(--ink2);display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline}
+.kishin .body{display:contents}
+.kishin .hint{color:var(--muted);font-size:11.5px}
+/* 「棋神の一手 ▲５八歩 −1013」「実際 ▲５八金 −875 ??」はそれぞれひと塊で折り返す */
+.kishin .pair{display:inline-flex;gap:6px;align-items:baseline;white-space:nowrap}
+.kishin .k{font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+.kishin .km{font-family:var(--mincho);font-size:15px;color:var(--ink)}
+.kishin .b{color:var(--sente)} .kishin .w{color:var(--gote)}
+.kishin .cp{font-family:var(--mincho);font-weight:600;font-variant-numeric:tabular-nums}
+.kishin .same{color:var(--gold);font-weight:600}
+.kishin .g{font-family:var(--mincho);font-weight:700}
+.kishin #pvExit{font-size:11.5px;padding:3px 8px}
+
+/* ── chart ────────────────────────────── */
+.chartbox{padding:6px 14px 12px;position:relative}
+svg{display:block;width:100%;height:auto;overflow:visible}
+.tip{position:absolute;pointer-events:none;background:var(--surface);
+  border:1px solid var(--rule-strong);border-radius:2px;padding:6px 9px;font-size:12px;
+  box-shadow:var(--shadow);opacity:0;transition:opacity .1s;white-space:nowrap;z-index:5}
+.tip .t-ply{color:var(--muted);font-size:10px;letter-spacing:.08em}
+.tip .t-mv{font-family:var(--mincho);font-size:14px}
+.tip .t-cp{font-family:var(--mincho);font-weight:600}
+
+/* ── detail ───────────────────────────── */
+.detail{padding:13px 14px;display:grid;gap:9px}
+.dl{display:grid;grid-template-columns:64px 1fr;gap:10px;align-items:baseline}
+.dl dt{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.dl dd{margin:0;font-family:var(--mincho);font-size:15px}
+.dl dd.pv{font-family:var(--sans);font-size:12px;color:var(--ink2);
+  line-height:1.75;word-break:break-all}
+/* 読み筋。1手ずつ押せる。辿った手を濃く、いま盤に出ている手に下線。先頭＝棋神の一手 */
+.dl dd.pv .m{cursor:pointer;border-radius:2px}
+.dl dd.pv .m:hover{background:var(--hi)}
+.dl dd.pv .m:first-child{font-family:var(--mincho);font-size:14px;color:var(--ink)}
+.dl dd.pv .m.done{color:var(--ink)}
+.dl dd.pv .m.cur{color:var(--ink);font-weight:600;
+  text-decoration:underline;text-decoration-color:var(--gold);text-underline-offset:3px}
+.big{font-family:var(--mincho);font-size:30px;font-weight:600;line-height:1}
+.big.b{color:var(--sente)} .big.w{color:var(--gote)}
+
+/* ── movelist ─────────────────────────── */
+.moves{max-height:270px;overflow-y:auto}
+.mv{display:grid;grid-template-columns:34px 20px 1fr 62px 34px;gap:8px;align-items:center;
+  padding:4px 14px;cursor:pointer;border:0;background:none;width:100%;text-align:left;
+  color:var(--ink);border-radius:0}
+.mv:hover{background:var(--sunk)}
+.mv[aria-current="true"]{background:var(--hi)}
+.mv .n{font-size:11px;color:var(--muted)}
+.mv .s{font-family:var(--mincho);font-size:12px}
+.mv.b .s{color:var(--sente)} .mv.w .s{color:var(--gote)}
+.mv .k{font-family:var(--mincho);font-size:14px}
+.mv .l{font-size:11px;color:var(--muted);text-align:right}
+.mv .g{font-family:var(--mincho);font-size:13px;font-weight:700;text-align:center}
+.mv.b .g{color:var(--sente)} .mv.w .g{color:var(--gote)}
+.note{font-size:11px;color:var(--muted);padding:9px 14px;border-top:1px solid var(--rule);
+  line-height:1.6}
+.stack{display:grid;gap:18px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+.back{font-size:12px;color:var(--muted);text-decoration:none;display:inline-block;margin-bottom:6px}.back:hover{color:var(--ink)}
+</style>
+
+<div class="wrap">
+<header>
+  <div>
+    <a class="back" href="./">← 全対局</a>
+<div class="players">
+      <span class="pl b"><span class="mk">▲</span><span class="nm" id="sente"></span><span class="rk" id="senteRank"></span></span>
+      <span class="vs">—</span>
+      <span class="pl w"><span class="mk">△</span><span class="nm" id="gote"></span><span class="rk" id="goteRank"></span></span>
+    </div>
+    <div class="meta"><span id="date"></span><span id="tc"></span><span id="len"></span><span id="eng"></span></div>
+  </div>
+  <div class="stats">
+    <div class="stat b"><div class="k">▲平均損失</div><div class="v tnum" id="avgB"></div></div>
+    <div class="stat w"><div class="k">△平均損失</div><div class="v tnum" id="avgW"></div></div>
+  </div>
+</header>
+
+<div class="grid">
+  <div class="card boardcard">
+    <div class="hand w" id="handTop"></div>
+    <div class="boardbox">
+      <div class="files" id="files"></div>
+      <div class="board" id="board"></div>
+      <div class="ranks" id="ranks"></div>
+    </div>
+    <div class="hand b" id="handBottom"></div>
+    <div class="ctl">
+      <button id="first" title="開始局面">|◀</button>
+      <button id="prev" title="1手戻る">◀</button>
+      <span class="ply tnum" id="plyLabel"></span>
+      <button id="next" title="1手進む">▶</button>
+      <button id="last" title="最終局面">▶|</button>
+      <input type="range" id="slider" min="0" value="0">
+      <button id="flip" title="盤を反転">⇅</button>
+      <button id="sound" title="駒音を切り替え（M）">♪</button>
+    </div>
+    <div class="kishin">
+      <button id="kishin" title="棋神の一手を盤に出す（K）。▶ でその先の読み筋を辿る" aria-pressed="false">棋神</button>
+      <span class="body" id="kishinLine"></span>
+      <button id="pvExit" title="本譜に戻る（Esc）" hidden>戻る</button>
+    </div>
+  </div>
+
+  <div class="stack">
+    <div class="card">
+      <h2 id="chartHead">評価値</h2>
+      <div class="chartbox">
+        <svg id="chart" viewBox="0 0 720 260" role="img" aria-labelledby="chartTitle"></svg>
+        <p id="chartTitle" hidden></p>
+        <div class="tip" id="tip"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>この局面</h2>
+      <div class="detail">
+        <div class="dl"><dt>評価値</dt><dd><span class="big" id="dCp"></span> <span id="dSide" style="color:var(--muted);font-size:12px"></span></dd></div>
+        <div class="dl"><dt>読み筋</dt><dd class="pv" id="dLine"></dd></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>棋譜</h2>
+      <div class="moves" id="movelist"></div>
+      <p class="note">損失＝その手で失った評価値。<b>?!</b> 疑問手（150〜）／<b>?</b> 悪手（300〜）／<b>??</b> 大悪手（500〜）。
+      勝敗が決した局面（±2000超）での上下は損失として数えていません。</p>
+    </div>
+  </div>
+</div>
+</div>
+
+<script type="module">
+import { loadGame } from "./db.js";
+const DATA = await loadGame(new URLSearchParams(location.search).get("id")).catch(err => {
+  document.querySelector(".wrap").innerHTML =
+    `<p style="padding:40px 16px;color:var(--ink2)">${err.message}<br><a href="./">← 全対局</a></p>`;
+  throw err;
+});
+document.title = `▲${DATA.sente} vs △${DATA.gote}`;;
+const ME = "christel09";
+
+/* ── SFEN → 盤面 ─────────────────────── */
+const KANJI = {P:"歩",L:"香",N:"桂",S:"銀",G:"金",B:"角",R:"飛",K:"王"};
+const PRO   = {P:"と",L:"杏",N:"圭",S:"全",B:"馬",R:"龍"};
+const HAND_ORDER = "RBGSNLP";
+
+function parseSfen(sfen){
+  const [boardPart, turn, handPart] = sfen.split(" ");
+  const board = [];                       // board[rank0..8][file0..8] 段一..九 / 筋9..1
+  for (const row of boardPart.split("/")){
+    const cells = [];
+    let promoted = false;
+    for (const ch of row){
+      if (ch === "+"){ promoted = true; continue; }
+      if (ch >= "1" && ch <= "9"){ for(let i=0;i<+ch;i++) cells.push(null); continue; }
+      const black = ch === ch.toUpperCase();
+      const letter = ch.toUpperCase();
+      cells.push({letter, black, promoted});
+      promoted = false;
+    }
+    board.push(cells);
+  }
+  const hands = {b:{}, w:{}};
+  if (handPart && handPart !== "-"){
+    let n = "";
+    for (const ch of handPart){
+      if (ch >= "0" && ch <= "9"){ n += ch; continue; }
+      const side = ch === ch.toUpperCase() ? "b" : "w";
+      hands[side][ch.toUpperCase()] = (hands[side][ch.toUpperCase()]||0) + (n ? +n : 1);
+      n = "";
+    }
+  }
+  return {board, turn, hands};
+}
+
+function komaText(p){
+  if (p.promoted) return PRO[p.letter] || KANJI[p.letter];
+  if (p.letter === "K") return p.black ? "王" : "玉";
+  return KANJI[p.letter];
+}
+
+/* ── USI → 日本語表記 ─────────────────── */
+const KAN9 = "一二三四五六七八九";
+const sqIdx = s => [s.charCodeAt(1) - 97, 9 - +s[0]];   // [rank0, col0]
+
+function applyUsi(st, u){
+  const board = st.board.map(r => r.slice());
+  const hands = {b:{...st.hands.b}, w:{...st.hands.w}};
+  const black = st.turn === "b", me = black ? "b" : "w";
+  const [dr, dc] = sqIdx(u.slice(2, 4));
+  if (u[1] === "*"){
+    const L = u[0];
+    hands[me][L] = (hands[me][L] || 1) - 1;
+    if (!hands[me][L]) delete hands[me][L];
+    board[dr][dc] = {letter:L, black, promoted:false};
+  } else {
+    const [sr, sc] = sqIdx(u.slice(0, 2));
+    const p = board[sr][sc];
+    if (!p) return st;                       // 想定外。壊れるより黙って据え置く
+    const cap = board[dr][dc];
+    if (cap) hands[me][cap.letter] = (hands[me][cap.letter] || 0) + 1;
+    board[sr][sc] = null;
+    board[dr][dc] = {letter:p.letter, black:p.black,
+                     promoted:p.promoted || u.endsWith("+")};
+  }
+  return {board, hands, turn: black ? "w" : "b"};
+}
+
+function usiToJa(st, u){
+  if (!u) return "";
+  const mark = st.turn === "b" ? "▲" : "△";
+  const dst = u.slice(2, 4);
+  const dText = dst[0] + KAN9[dst.charCodeAt(1) - 97];
+  if (u[1] === "*") return `${mark}${dText}${KANJI[u[0]]}打`;
+  const [sr, sc] = sqIdx(u.slice(0, 2));
+  const p = st.board[sr][sc];
+  const name = p ? komaText(p) : "";
+  const src = u.slice(0, 2);
+  return `${mark}${dText}${name}${u.endsWith("+") ? "成" : ""}`
+       + `(${src[0]}${src.charCodeAt(1) - 96})`;
+}
+
+function pvToJa(sfen, pv){
+  let st = parseSfen(sfen);
+  return pv.map(u => { const t = usiToJa(st, u); st = applyUsi(st, u); return t; });
+}
+
+/* ── 状態 ─────────────────────────────── */
+const N = DATA.positions.length - 1;
+let ply = 0;
+let flipped = DATA.gote === ME;          // 自分が下に来るように
+// 🔑 自分がどちら側か。JSON の評価値は先手視点なので、自分が後手なら符号を返して
+// 「プラス＝自分が良い」に揃える。flipped は盤の向きを変えるボタンで動く一時的な
+// 状態なので、評価値の向きの根拠にはしない。自分が指していない棋譜は先手視点のまま
+const MY_SIDE = DATA.sente === ME ? "b" : DATA.gote === ME ? "w" : null;
+const POS_SIDE = MY_SIDE || "b";                 // 評価値がプラスのとき良いほう
+const NEG_SIDE = POS_SIDE === "b" ? "w" : "b";
+const SIGN = POS_SIDE === "w" ? -1 : 1;
+const myCp = cp => SIGN * cp;
+const cpSide = cp => myCp(cp) >= 0 ? POS_SIDE : NEG_SIDE;   // 色は「今良いほう」の側の色
+// 棋神ON のあいだだけ入る。null なら OFF。
+// {moves: 読み筋のUSI列, states: 各手を指した後の局面（先頭は分岐点）, idx: 何手目まで進めたか}
+// idx 0 は本譜の局面そのもので、矢印が1手目を指す。▶ で1手ずつ指していく
+let pv = null;
+
+const $ = id => document.getElementById(id);
+const KAN = "一二三四五六七八九";
+
+// いま盤に出す局面。読み筋の途中なら指した後の局面、そうでなければ本譜
+const viewState = () => pv ? pv.states[pv.idx] : parseSfen(DATA.positions[ply].sfen);
+// 直前に指した手の移動先 → [rank0, file0]。読み筋の分岐点では本譜の最終手を光らせたまま
+function lastMoveSquare(){
+  let u;
+  if (pv && pv.idx > 0) u = pv.moves[pv.idx - 1];
+  else { const mv = DATA.moves.find(m => m.n === ply && !m.terminal); u = mv && mv.usi; }
+  if (!u) return null;
+  const dst = u.slice(2, 4);
+  const file = +dst[0], rank = dst.charCodeAt(1) - 96;
+  return [rank - 1, 9 - file];
+}
+
+// 🔑 盤のマス目は起動時に一度だけ作り、以降は中身だけ書き換える。
+// 毎手 innerHTML を作り直すと81マス＋駒が丸ごと捨てられて作り直されるので、
+// 「次の一手」を押すたびに盤がちらつく（押しっぱなしにすると特に目立つ）
+const SQ = [];
+function buildBoard(){
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < 81; i++){
+    const sq = document.createElement("div");
+    sq.className = "sq";
+    const koma = document.createElement("div");
+    koma.className = "koma";
+    koma.hidden = true;
+    sq.appendChild(koma);
+    frag.appendChild(sq);
+    SQ.push({sq, koma});
+  }
+  $("board").appendChild(frag);
+  // 棋神の一手の層。矢印も枠も1度だけ作り、renderBest で属性だけ動かす
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 9 9");
+  svg.setAttribute("preserveAspectRatio", "none");
+  svg.setAttribute("aria-hidden", "true");
+  svg.id = "best";
+  svg.setAttribute("class", "best");
+  svg.innerHTML = `<line class="halo"/><line class="line"/><polygon class="head"/>
+    <rect class="ring" rx=".07"/><text class="drop"></text>`;
+  $("board").appendChild(svg);
+}
+
+/* ── 棋神の一手 ───────────────────────── */
+// その局面で指せる最善手（USI）。古いJSONは candidates を持たないので best に落ちる
+const bestOf = p => (p.candidates && p.candidates.length && p.candidates[0].move) || p.best || null;
+// 局面 ply から実際に指された手。moves[].n は「指した後」の手数
+const playedFrom = ply => DATA.moves.find(m => m.n === ply + 1 && !m.terminal) || null;
+
+// 盤の座標 [rank0, col0] → 表示上のマス中心（0..9 の SVG 座標）
+function cellCenter(r, c){
+  const ri = flipped ? 8 - r : r, ci = flipped ? 8 - c : c;
+  return [ci + .5, ri + .5];
+}
+
+function renderBest(){
+  const svg = $("best");
+  // 矢印は読み筋の次の手。末尾まで進めたら消える
+  const u = pv ? pv.moves[pv.idx] : null;
+  if (!u){ svg.setAttribute("class", "best"); return; }
+  const side = (ply + pv.idx) % 2 === 0 ? "b" : "w";
+  svg.setAttribute("class", "best on " + side);
+  const [dr, dc] = sqIdx(u.slice(2, 4));
+  const [dx, dy] = cellCenter(dr, dc);
+  const ring = svg.querySelector(".ring");
+  ring.setAttribute("x", dx - .42); ring.setAttribute("y", dy - .42);
+  ring.setAttribute("width", .84); ring.setAttribute("height", .84);
+  const halo = svg.querySelector(".halo"), line = svg.querySelector(".line"),
+        head = svg.querySelector(".head"), drop = svg.querySelector(".drop");
+  if (u[1] === "*"){                     // 打つ手は矢印の尻尾がない。着地点に駒名を置く
+    halo.setAttribute("visibility", "hidden"); line.setAttribute("visibility", "hidden");
+    head.setAttribute("visibility", "hidden");
+    drop.setAttribute("visibility", "visible");
+    drop.setAttribute("x", dx); drop.setAttribute("y", dy);
+    // 盤上の駒と同じく、上側の手番の駒は逆さに置く
+    const upside = (side === "w") !== flipped;
+    drop.setAttribute("transform", upside ? `rotate(180 ${dx} ${dy})` : "");
+    drop.textContent = KANJI[u[0]];
+    return;
+  }
+  drop.setAttribute("visibility", "hidden");
+  const [sr, sc] = sqIdx(u.slice(0, 2));
+  const [sx, sy] = cellCenter(sr, sc);
+  const vx = dx - sx, vy = dy - sy, len = Math.hypot(vx, vy) || 1;
+  const ux = vx / len, uy = vy / len;
+  // 矢印の先は着地マスの枠に触れるところで止める。先端の三角は .36、線はその手前まで
+  const tipX = dx - ux * .45, tipY = dy - uy * .45;
+  const baseX = tipX - ux * .36, baseY = tipY - uy * .36;
+  const px = -uy * .2, py = ux * .2;
+  for (const l of [halo, line]){
+    l.setAttribute("visibility", "visible");
+    l.setAttribute("x1", sx); l.setAttribute("y1", sy);
+    l.setAttribute("x2", baseX); l.setAttribute("y2", baseY);
+  }
+  head.setAttribute("visibility", "visible");
+  head.setAttribute("points",
+    `${tipX},${tipY} ${baseX + px},${baseY + py} ${baseX - px},${baseY - py}`);
+}
+
+function renderKishinLine(){
+  const box = $("kishinLine");
+  $("kishin").setAttribute("aria-pressed", !!pv);
+  $("pvExit").hidden = !(pv && pv.idx > 0);
+  if (!pv){ box.innerHTML = `<span class="hint">押すと、この局面での最善手を盤に出す。▶ でその先を辿れる</span>`; return; }
+  if (pv.idx > 0){                       // 読み筋の途中。いま指した手と、何手目か
+    const side = (ply + pv.idx - 1) % 2 === 0 ? "b" : "w";
+    box.innerHTML = `<span class="pair"><span class="k">読み筋</span>`
+      + `<span class="km ${side}">${usiToJa(pv.states[pv.idx - 1], pv.moves[pv.idx - 1])}</span>`
+      + `<span class="tnum" style="color:var(--muted)">${pv.idx} / ${pv.moves.length}</span></span>`
+      + `<span class="hint">◀ ▶ で進む · Esc で本譜へ</span>`;
+    return;
+  }
+  const p = DATA.positions[ply];
+  const side = ply % 2 === 0 ? "b" : "w";
+  const u = bestOf(p);
+  const st = parseSfen(p.sfen);
+  const bestJa = u ? usiToJa(st, u) : "—";
+  const mv = playedFrom(ply);
+  let actual;
+  if (!mv) actual = `<span style="color:var(--muted)">—</span>`;
+  else if (mv.usi === u) actual = `<span class="same">一致 ✓</span>`;
+  else {
+    const sym = mv.grade === "blunder" ? "??" : mv.grade === "mistake" ? "?" : mv.grade ? "?!" : "";
+    actual = `<span class="km ${side}">${side === "b" ? "▲" : "△"}${mv.kif}</span>`
+      + (mv.loss ? `<span class="cp ${side}">−${mv.loss}</span>` : "")
+      + (sym ? `<span class="g ${side}">${sym}</span>` : "");
+  }
+  box.innerHTML = `<span class="pair"><span class="k">棋神の一手</span><span class="km ${side}">${bestJa}</span>`
+    + `<span class="cp ${cpSide(p.cp)}">${fmtCp(p.cp)}</span></span>`
+    + `<span class="pair"><span class="k">実際</span>${actual}</span>`
+    + `<span class="hint">▶ で読み筋を辿る</span>`;
+}
+
+let shownFlip = null, shownHand = ["", ""];
+
+function renderBoard(){
+  const {board, hands} = viewState();
+  const hit = lastMoveSquare();
+  $("board").classList.toggle("pv", !!(pv && pv.idx > 0));
+
+  // 筋・段の目盛りは盤を反転したときしか変わらない
+  if (shownFlip !== flipped){
+    const files = flipped ? [1,2,3,4,5,6,7,8,9] : [9,8,7,6,5,4,3,2,1];
+    $("files").innerHTML = files.map(f => `<span>${f}</span>`).join("");
+    const ranks = flipped ? [...KAN].reverse() : [...KAN];
+    $("ranks").innerHTML = ranks.map(r => `<span>${r}</span>`).join("");
+    shownFlip = flipped;
+  }
+
+  for (let ri = 0; ri < 9; ri++){
+    for (let ci = 0; ci < 9; ci++){
+      const realR = flipped ? 8 - ri : ri;
+      const realC = flipped ? 8 - ci : ci;
+      const p = board[realR][realC];
+      const {sq, koma} = SQ[ri * 9 + ci];
+      sq.classList.toggle("last", !!(hit && hit[0] === realR && hit[1] === realC));
+      if (!p){ koma.hidden = true; continue; }
+      const t = komaText(p);
+      const cls = [ "koma",
+        (p.black ? (flipped?"w":"") : (flipped?"":"w")),
+        p.promoted ? "pro" : "" ].filter(Boolean).join(" ");
+      // 同じ値の代入でもスタイル再計算が走るので、変わったときだけ書く
+      if (koma.textContent !== t) koma.textContent = t;
+      if (koma.className !== cls) koma.className = cls;
+      koma.hidden = false;
+    }
+  }
+
+  const handHtml = side => {
+    const h = hands[side];
+    const parts = [...HAND_ORDER].filter(l => h[l]).map(l =>
+      `<span class="pc">${KANJI[l]}${h[l] > 1 ? `<sub>${h[l]}</sub>` : ""}</span>`);
+    return parts.length ? parts.join("") : `<span class="none">なし</span>`;
+  };
+  const topSide = flipped ? "b" : "w", botSide = flipped ? "w" : "b";
+  const label = s => (s === "b" ? "▲" : "△") + (s === "b" ? DATA.sente : DATA.gote);
+  const top = `<span class="lab">${label(topSide)}</span>` + handHtml(topSide);
+  const bot = `<span class="lab">${label(botSide)}</span>` + handHtml(botSide);
+  $("handTop").className = "hand " + topSide;
+  $("handBottom").className = "hand " + botSide;
+  // 持ち駒は動かない手のほうが多い。中身が変わったときだけ差し替える
+  if (shownHand[0] !== top){ $("handTop").innerHTML = top; shownHand[0] = top; }
+  if (shownHand[1] !== bot){ $("handBottom").innerHTML = bot; shownHand[1] = bot; }
+  renderBest();
+}
+
+/* ── 評価値の表示 ─────────────────────── */
+const MATE = DATA.mateScore, CLAMP = DATA.clamp;
+const isMate = cp => Math.abs(cp) >= MATE - 1000;
+function fmtCp(cp){
+  if (isMate(cp)) return (cp > 0 ? "▲詰" : "△詰") + (MATE - Math.abs(cp));
+  const v = myCp(cp);
+  return (v > 0 ? "+" : "") + v;
+}
+const clampCp = cp => Math.max(-CLAMP, Math.min(CLAMP, cp));
+
+/* ── グラフ ───────────────────────────── */
+/* 将棋ウォーズの評価値グラフに寄せている: 線形の縦軸（±2000、500刻み）、
+   10手ごとの縦線、1手ごとの点を打った赤い1本線、手数の目盛りは0の線に沿って中に書く。
+   見慣れた形のほうが読み違えない。横軸は最終手の先の10の倍数まで伸ばす */
+const W = 720, H = 260, PAD = {t:14, r:16, b:10, l:46};
+const iw = W - PAD.l - PAD.r, ih = H - PAD.t - PAD.b;
+const XMAX = Math.floor(N / 10) * 10 + 10;
+const X = i => PAD.l + i / XMAX * iw;
+const Y = cp => PAD.t + (1 - (clampCp(cp) / CLAMP + 1) / 2) * ih;
+
+function renderChart(){
+  const who = MY_SIDE ? `${ME}（${MY_SIDE === "b" ? "▲先手" : "△後手"}）` : "▲先手";
+  $("chartHead").textContent = `評価値 — ${who}視点`;
+  $("chartTitle").textContent = `手数ごとの評価値の推移。上が${who}優勢、下が相手優勢。`;
+  const pts = DATA.positions.map(p => [X(p.ply), Y(myCp(p.cp))]);
+  const line = pts.map((p,i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+  const zero = Y(0).toFixed(1);
+
+  const grid = [];
+  for (let v = -CLAMP; v <= CLAMP; v += 500){
+    const y = Y(v).toFixed(1);
+    grid.push(`<line x1="${PAD.l}" x2="${W-PAD.r}" y1="${y}" y2="${y}"
+        stroke="${v ? "var(--grid)" : "var(--rule-strong)"}" stroke-width="${v ? .6 : 1}"/>
+      <text x="${PAD.l-6}" y="${y}" text-anchor="end" dominant-baseline="middle"
+        font-size="9.5" fill="var(--muted)" class="tnum">${v}</text>`);
+  }
+  for (let i = 0; i <= XMAX; i += 10){
+    const x = X(i).toFixed(1);
+    grid.push(`<line x1="${x}" x2="${x}" y1="${PAD.t}" y2="${H-PAD.b}"
+        stroke="${i ? "var(--grid)" : "var(--rule-strong)"}" stroke-width="${i ? .6 : 1}"/>`);
+    if (i) grid.push(`<text x="${x}" y="${+zero + 12}" text-anchor="middle"
+        font-size="9.5" fill="var(--muted)" class="tnum">${i}</text>`);
+  }
+
+  const dots = pts.map(p =>
+    `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.2" fill="var(--chart)"/>`).join("");
+
+  // 悪手の印はグラフには打たない。1手ごとの点と重なって読めなくなる。棋譜欄と棋神の行にある
+
+  $("chart").innerHTML = `
+    ${grid.join("")}
+    <path d="${line}" fill="none" stroke="var(--chart)" stroke-width="1.6"
+      stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots}
+    <line id="cross" x1="0" x2="0" y1="${PAD.t}" y2="${H-PAD.b}"
+      stroke="var(--gold)" stroke-width="2" opacity="0"/>
+    <circle id="dot" r="4.5" fill="var(--gold)" stroke="var(--surface)" stroke-width="1.5" opacity="0"/>
+    <rect x="${PAD.l}" y="${PAD.t}" width="${iw}" height="${ih}" fill="transparent" id="hit"/>`;
+}
+
+function plyFromEvent(e){
+  const r = $("chart").getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width * W;
+  return Math.max(0, Math.min(N, Math.round((x - PAD.l) / iw * XMAX)));
+}
+
+function markChart(){
+  const p = DATA.positions[ply];
+  const x = X(ply), y = Y(myCp(p.cp));
+  const c = $("cross"), d = $("dot");
+  if (!c) return;
+  c.setAttribute("x1", x); c.setAttribute("x2", x); c.setAttribute("opacity", .8);
+  d.setAttribute("cx", x); d.setAttribute("cy", y); d.setAttribute("opacity", 1);
+}
+
+/* ── 詳細と棋譜 ───────────────────────── */
+// その局面の読み筋（USI列）。MultiPV 3 で解析した古いJSONは candidates[0] が同じもの
+const lineOf = p => (p.candidates && p.candidates.length && p.candidates[0].pv)
+                 || (p.pv && p.pv.length ? p.pv : (p.best ? [p.best] : []));
+
+// 読み筋を1手ずつ span にして、押した手まで一気に進められるようにする
+function lineHtml(p){
+  const ja = pvToJa(p.sfen, lineOf(p));
+  if (!ja.length) return '<span style="color:var(--muted)">—</span>';
+  return ja.map((t, k) => {
+    const cls = pv && k < pv.idx ? (k === pv.idx - 1 ? "m done cur" : "m done") : "m";
+    return `<span class="${cls}" data-k="${k}">${t}</span>`;
+  }).join("　");
+}
+
+let shownLine = "", curMv = null;
+
+function renderDetail(){
+  const p = DATA.positions[ply];
+  const side = ply % 2 === 0 ? "b" : "w";
+  $("dCp").textContent = fmtCp(p.cp);
+  $("dCp").className = "big " + cpSide(p.cp);
+  $("dSide").textContent = `手番 ${side === "b" ? "▲先手" : "△後手"} · depth ${p.depth}`;
+  const lh = lineHtml(p);
+  if (shownLine !== lh){ $("dLine").innerHTML = lh; shownLine = lh; }
+  const inLine = pv && pv.idx > 0;
+  $("plyLabel").textContent = inLine ? `+${pv.idx} / ${pv.moves.length}` : ply + " / " + N;
+  $("plyLabel").className = "ply tnum" + (inLine ? " pv" : "");
+  $("slider").value = ply;
+  const next = $("movelist").querySelector(`.mv[data-n="${ply}"]`);
+  if (next !== curMv){
+    if (curMv) curMv.setAttribute("aria-current", "false");
+    if (next) next.setAttribute("aria-current", "true");
+    curMv = next;
+  }
+}
+
+function renderMoves(){
+  $("movelist").innerHTML = DATA.moves.map(m => {
+    if (m.terminal) return `<button class="mv ${m.side}" data-n="${m.n}">
+      <span class="n tnum">${m.n}</span><span class="s"></span>
+      <span class="k">${m.kif}</span><span class="l"></span><span class="g"></span></button>`;
+    const sym = m.grade === "blunder" ? "??" : m.grade === "mistake" ? "?" : m.grade ? "?!" : "";
+    return `<button class="mv ${m.side}" data-n="${m.n}">
+      <span class="n tnum">${m.n}</span>
+      <span class="s">${m.side === "b" ? "▲" : "△"}</span>
+      <span class="k">${m.kif}</span>
+      <span class="l tnum">${m.loss ? "−" + m.loss : ""}</span>
+      <span class="g">${sym}</span></button>`;
+  }).join("");
+  $("movelist").querySelectorAll(".mv").forEach(el =>
+    el.onclick = () => go(Math.min(+el.dataset.n, N)));
+}
+
+// scrollIntoView はページ全体をスクロールさせることがある（「次の一手」を
+// 押すたびに画面が動く）。棋譜欄の中だけで位置を合わせる
+function keepVisible(el){
+  const box = $("movelist");
+  const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
+  if (r.top < b.top) box.scrollTop += r.top - b.top;
+  else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom;
+}
+
+/* ── 駒音 ─────────────────────────────── */
+// 外部ファイルを持ち込まず Web Audio で「パチッ」を合成する。
+// 短い高域ノイズ（駒が盤に当たる瞬間）＋すぐ減衰する木の響き、の2層。
+// 数字は試聴して決めたもの（乾いた音: 響き20ms・アタック7.5kHz・低音ほぼ無し）
+let ac = null, soundOn = true, lastPachi = 0;
+try { soundOn = localStorage.getItem("shogi-sound") !== "off"; } catch {}
+function pachi(){
+  if (!soundOn) return;
+  const now = performance.now();
+  if (now - lastPachi < 45) return;          // スライダーを引きずった時に連射しすぎない
+  lastPachi = now;
+  try {
+    if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state === "suspended") ac.resume();
+  } catch { return; }
+  const t = ac.currentTime;
+  const out = ac.createGain(); out.gain.value = 0.46; out.connect(ac.destination);
+  const jit = 0.94 + Math.random() * 0.12;   // 毎回わずかに高さを変えて機械っぽさを消す
+  // アタック: 21ms のノイズを高域だけ通す
+  const len = Math.floor(ac.sampleRate * 0.021);
+  const buf = ac.createBuffer(1, len, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 6);
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 7500 * jit; bp.Q.value = 0.8;
+  src.connect(bp).connect(out); src.start(t); src.stop(t + 0.031);
+  // 木の響き: すぐ消える倍音を3本（低い620Hzはごく薄く）
+  [[1900, 0.60, 0.020], [3100, 0.30, 0.013], [620, 0.024, 0.014]].forEach(([f, g, dur]) => {
+    const o = ac.createOscillator(); o.type = "sine"; o.frequency.value = f * jit;
+    const og = ac.createGain();
+    og.gain.setValueAtTime(g, t); og.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(og).connect(out); o.start(t); o.stop(t + dur + 0.01);
+  });
+}
+function setSound(on){
+  soundOn = on;
+  $("sound").classList.toggle("off", !on);
+  $("sound").title = (on ? "駒音: ON" : "駒音: OFF") + "（M）";
+  try { localStorage.setItem("shogi-sound", on ? "on" : "off"); } catch {}
+}
+
+function go(n, {silent = false} = {}){
+  const to = Math.max(0, Math.min(N, n));
+  const moved = to !== ply || (pv && pv.idx > 0);
+  if (moved && !silent) pachi();           // 局面が動いた時だけ鳴らす
+  ply = to;
+  if (pv) pv = lineAt(ply);                // 棋神ONのまま本譜を動かしたら、新しい局面の読み筋の頭に
+  renderBoard(); renderDetail(); renderKishinLine(); markChart();
+  if (curMv) keepVisible(curMv);
+  else $("movelist").scrollTop = 0;   // 開始局面に戻ったら棋譜欄も先頭へ
+}
+
+/* ── 棋神: 読み筋を盤で辿る ───────────── */
+// 局面 ply の読み筋を、全手分の局面ごと先に作っておく。以後は添字を動かすだけ。
+// グラフの印と棋譜欄は分岐点のまま動かさない（読み筋の途中の評価値は持っていない）
+function lineAt(ply, idx = 0){
+  const moves = lineOf(DATA.positions[ply]);
+  const states = [parseSfen(DATA.positions[ply].sfen)];
+  for (const u of moves){
+    const next = applyUsi(states.at(-1), u);
+    if (next === states.at(-1)) break;     // 壊れた手が来たらそこで読み筋を切る
+    states.push(next);
+  }
+  const usable = moves.slice(0, states.length - 1);
+  return {moves: usable, states, idx: Math.max(0, Math.min(usable.length, idx))};
+}
+function setKishin(on, idx = 0){
+  const before = pv ? pv.idx : 0;
+  pv = on ? lineAt(ply, idx) : null;
+  if ((pv ? pv.idx : 0) !== before) pachi();
+  renderBoard(); renderDetail(); renderKishinLine();
+}
+function stepPv(d){
+  const to = Math.max(0, Math.min(pv.moves.length, pv.idx + d));
+  if (to === pv.idx) return;
+  pv.idx = to;
+  pachi();
+  renderBoard(); renderDetail(); renderKishinLine();
+}
+// ◀ は読み筋の頭まで戻ったら本譜を1手戻す（棋神はONのまま）。▶ は棋神ONなら読み筋を進める
+const stepBack = () => pv && pv.idx ? stepPv(-1) : go(ply - 1);
+const stepFwd  = () => pv ? stepPv(1) : go(ply + 1);
+
+/* ── 起動 ─────────────────────────────── */
+$("sente").textContent = DATA.sente; $("senteRank").textContent = DATA.senteRank;
+$("gote").textContent = DATA.gote;   $("goteRank").textContent = DATA.goteRank;
+$("date").textContent = DATA.date;   $("tc").textContent = DATA.timeControl;
+const term = DATA.moves.at(-1);
+$("len").textContent = `全${DATA.moves.length}手${term && term.terminal ? " " + term.kif : ""}`;
+$("avgB").textContent = DATA.avgLoss.b; $("avgW").textContent = DATA.avgLoss.w;
+// 評価値のものさし。どのエンジン・評価モード・持ち時間で測ったかで数字の意味が変わる
+const EI = DATA.engineInfo;
+if (EI) $("eng").textContent =
+  `${EI.evalMode}${EI.evalFile ? " " + EI.evalFile : ""} · ${EI.movetime}ms`;
+$("slider").max = N;
+
+buildBoard(); renderChart(); renderMoves(); go(+(new URLSearchParams(location.search).get("ply")) || 0, {silent: true});
+setSound(soundOn);
+
+$("first").onclick = () => go(0);
+$("prev").onclick  = stepBack;
+$("next").onclick  = stepFwd;
+$("last").onclick  = () => go(N);
+$("slider").oninput = e => go(+e.target.value);
+$("flip").onclick = () => { flipped = !flipped; renderBoard(); };
+$("sound").onclick = () => setSound(!soundOn);
+$("pvExit").onclick = () => setKishin(false);
+// 読み筋の中の手を押すと、棋神ONにしてその手まで一気に進める。
+// 読み筋欄は innerHTML を作り直すので、要素ではなく親で受ける
+$("dLine").addEventListener("click", e => {
+  const m = e.target.closest(".m");
+  if (m) setKishin(true, +m.dataset.k + 1);
+});
+$("kishin").onclick = () => setKishin(!pv);
+addEventListener("keydown", e => {
+  if (e.key === "ArrowLeft"){ stepBack(); e.preventDefault(); }
+  if (e.key === "ArrowRight"){ stepFwd(); e.preventDefault(); }
+  if (e.key === "Escape"){ setKishin(false); }
+  if (e.key === "k" || e.key === "K"){ $("kishin").click(); }
+  if (e.key === "m" || e.key === "M"){ setSound(!soundOn); }
+});
+
+const tip = $("tip"), chart = $("chart");
+chart.addEventListener("pointermove", e => {
+  const n = plyFromEvent(e);
+  const p = DATA.positions[n];
+  const mv = DATA.moves.find(m => m.n === n);
+  const box = chart.parentElement.getBoundingClientRect();
+  tip.innerHTML = `<div class="t-ply tnum">${n}手目まで</div>
+    ${mv && !mv.terminal ? `<div class="t-mv">${mv.side === "b" ? "▲" : "△"}${mv.kif}</div>` : ""}
+    <div class="t-cp tnum" style="color:${cpSide(p.cp) === "b" ? "var(--sente)" : "var(--gote)"}">${fmtCp(p.cp)}</div>`;
+  tip.style.opacity = 1;
+  const rel = e.clientX - box.left;
+  tip.style.left = Math.min(box.width - 130, Math.max(4, rel + 12)) + "px";
+  tip.style.top = (e.clientY - box.top - 52) + "px";
+});
+chart.addEventListener("pointerleave", () => tip.style.opacity = 0);
+chart.addEventListener("click", e => go(plyFromEvent(e)));
+</script>
+
+</body>
+</html>

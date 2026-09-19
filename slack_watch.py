@@ -409,6 +409,15 @@ def main():
     if ch["retries"]:
         log(f"次回もう一度試すもの: {len(ch['retries'])}件")
 
+    # 解析済みの局を Supabase へ送る（公開ページ docs/ が読む）。
+    # 新着が無い日も走らせる。sync.py は毎回 Supabase の一覧を読むので、
+    # それが「活動あり」になって無料枠の pause（7日無活動）を防ぐ。
+    # 送信に失敗しても透かしは戻さない。棋譜と解析結果は手元（games/ out/）に残っていて、
+    # sync.py は「向こうに無いもの」を毎回送り直すので、翌日の実行で自然に追いつく
+    if not args.dry_run:
+        ok, out = run([sys.executable, "sync.py"])
+        log(("Supabase: " if ok else "Supabase 送信に失敗: ") + out.strip().replace("\n", " / ")[-300:])
+
 
 if __name__ == "__main__":
     main()
