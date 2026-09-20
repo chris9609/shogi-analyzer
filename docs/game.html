@@ -815,7 +815,9 @@ const stepFwd  = () => pv ? stepPv(1) : go(ply + 1);
 /* ── 起動 ─────────────────────────────── */
 $("sente").textContent = DATA.sente; $("senteRank").textContent = DATA.senteRank;
 $("gote").textContent = DATA.gote;   $("goteRank").textContent = DATA.goteRank;
-$("date").textContent = DATA.date;   $("tc").textContent = DATA.timeControl;
+// 開始日時は「2026/08/30 00:23:08」の形で入っているが、見せるのは日付まで
+$("date").textContent = (DATA.date || "").split(" ")[0];
+$("tc").textContent = DATA.timeControl;
 const term = DATA.moves.at(-1);
 $("len").textContent = `全${DATA.moves.length}手${term && term.terminal ? " " + term.kif : ""}`;
 $("avgB").textContent = DATA.avgLoss.b; $("avgW").textContent = DATA.avgLoss.w;

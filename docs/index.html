@@ -131,10 +131,7 @@ const $ = id => document.getElementById(id);
 $("who").textContent = ME;
 
 const mySide = g => g.sente === ME ? "b" : g.gote === ME ? "w" : null;
-const fmtDate = iso => {
-  const d = new Date(iso);
-  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
+const fmtDate = iso => { const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()}`; };
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
 try {
@@ -177,7 +174,7 @@ try {
     </a>`;
   });
   $("games").innerHTML = games.length
-    ? `<div class="h"><span>日時</span><span>相手</span><span>手番</span><span>結果</span><span style="text-align:right">損失</span><span style="text-align:right">悪手</span></div>` + rows.join("")
+    ? `<div class="h"><span>日付</span><span>相手</span><span>手番</span><span>結果</span><span style="text-align:right">損失</span><span style="text-align:right">悪手</span></div>` + rows.join("")
     : `<div class="msg">まだ対局がありません（Mac で python3 sync.py）</div>`;
 
   // ── まとめ ──
@@ -195,7 +192,7 @@ try {
   const worst = mine.slice(0, 10);
   $("worst").innerHTML = worst.length ? worst.map(m => {
     const g = games.find(x => x.id === m.game_id);
-    // 相手は伏せているので、どの対局かは日時で示す
+    // 相手は伏せているので、どの対局かは日付で示す
     // ビューアの ply は「その手を指す前の局面」なので n-1 を開く
     return `<li>
       <span class="n tnum">${m.n}手目</span>
