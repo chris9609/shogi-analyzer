@@ -57,7 +57,7 @@ h1{margin:0;font-family:var(--mincho);font-size:22px;font-weight:600;letter-spac
   text-transform:uppercase;color:var(--muted);font-weight:600;border-bottom:1px solid var(--rule)}
 
 /* 対局一覧：1行＝1局。狭い画面では列を畳む */
-.games{display:grid;grid-template-columns:auto 1fr auto auto auto auto;align-items:center}
+.games{display:grid;grid-template-columns:auto 1fr auto auto auto;align-items:center}
 .games>a,.games>.h{display:contents}
 .games>.h>span{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
   padding:8px 10px;border-bottom:1px solid var(--rule)}
@@ -73,11 +73,9 @@ h1{margin:0;font-family:var(--mincho);font-size:22px;font-weight:600;letter-spac
 .games .res{font-family:var(--mincho);font-weight:700;text-align:center}
 .games .res.win{color:var(--win)} .games .res.lose{color:var(--lose)} .games .res.draw{color:var(--muted)}
 .games .loss{text-align:right}
-.games .bad{font-family:var(--mincho);font-weight:700;color:var(--gote);text-align:right;font-size:13px}
-.games .bad .q{opacity:.55}
 @media(max-width:560px){
   .games{grid-template-columns:1fr auto auto auto}
-  .games .d,.games .bad{display:none}
+  .games .d{display:none}
   .games .opp small{display:block;margin:0}
 }
 
@@ -114,8 +112,7 @@ h1{margin:0;font-family:var(--mincho);font-size:22px;font-weight:600;letter-spac
 <div class="card">
   <h2>対局</h2>
   <div class="games" id="games"><div class="msg">読み込み中…</div></div>
-  <p class="note">平均損失＝1手あたりに失った評価値（自分の手番のみ）。
-  <b>?!</b> 疑問手（150〜）／<b>?</b> 悪手（300〜）／<b>??</b> 大悪手（500〜）の数。</p>
+  <p class="note">平均損失＝1手あたりに失った評価値（自分の手番のみ）。</p>
 </div>
 
 <div class="card">
@@ -146,11 +143,6 @@ try {
 
   // 自分の手だけに絞る（相手の悪手は振り返りの対象ではない）
   const mine = bad.filter(m => (m.side === "b" ? m.games.sente : m.games.gote) === ME);
-  const counts = {};
-  for (const m of mine) {
-    const c = counts[m.game_id] ??= { dubious: 0, mistake: 0, blunder: 0 };
-    c[m.grade]++;
-  }
 
   // ── 一覧 ──
   const rows = games.map(g => {
@@ -160,21 +152,16 @@ try {
     const res = !g.winner ? "draw" : g.winner === me ? "win" : "lose";
     const resLabel = { win: "○", lose: "●", draw: "△" }[res];
     const loss = me === "b" ? g.avg_loss_b : me === "w" ? g.avg_loss_w : g.avg_loss_b;
-    const c = counts[g.id] || {};
-    const badMarks = [c.blunder && `${c.blunder}<span class="q">??</span>`,
-                      c.mistake && `${c.mistake}<span class="q">?</span>`,
-                      c.dubious && `${c.dubious}<span class="q">?!</span>`].filter(Boolean).join(" ");
     return `<a href="game.html?id=${g.id}" title="${esc(g.terminal || "")} ${g.moves_count}手">
       <span class="d tnum">${fmtDate(g.played_at)}</span>
       <span class="opp">${esc(opp)}<small>${esc(oppRank || "")}</small></span>
       <span class="mk ${me || ""}">${me === "b" ? "▲" : me === "w" ? "△" : "–"}</span>
       <span class="res ${res}">${resLabel}</span>
       <span class="loss tnum">${loss}</span>
-      <span class="bad">${badMarks || "<span class='q'>—</span>"}</span>
     </a>`;
   });
   $("games").innerHTML = games.length
-    ? `<div class="h"><span>日付</span><span>相手</span><span>手番</span><span>結果</span><span style="text-align:right">損失</span><span style="text-align:right">悪手</span></div>` + rows.join("")
+    ? `<div class="h"><span>日付</span><span>相手</span><span>手番</span><span>結果</span><span style="text-align:right">損失</span></div>` + rows.join("")
     : `<div class="msg">まだ対局がありません（Mac で python3 sync.py）</div>`;
 
   // ── まとめ ──
