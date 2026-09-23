@@ -155,7 +155,7 @@ try {
     return `<a href="game.html?id=${g.id}" title="${esc(g.terminal || "")} ${g.moves_count}手">
       <span class="d tnum">${fmtDate(g.played_at)}</span>
       <span class="opp">${esc(opp)}<small>${esc(oppRank || "")}</small></span>
-      <span class="mk ${me || ""}">${me === "b" ? "▲" : me === "w" ? "△" : "–"}</span>
+      <span class="mk ${me || ""}">${me === "b" ? "先手" : me === "w" ? "後手" : "–"}</span>
       <span class="res ${res}">${resLabel}</span>
       <span class="loss tnum">${loss}</span>
     </a>`;
