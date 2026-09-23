@@ -13,7 +13,6 @@
   --rule:#E3E3DC; --rule-strong:#C9C9C0;
   --sente:#1D6FB8; --gote:#C0402F; --gold:#B8892B;
   --sente-soft:rgba(29,111,184,.13); --gote-soft:rgba(192,64,47,.13);
-  --win:#2E7D4F; --lose:#C0402F;
   --shadow:0 1px 2px rgba(26,26,24,.06),0 8px 24px -12px rgba(26,26,24,.14);
   --mincho:"Shippori Mincho","Hiragino Mincho ProN","Yu Mincho",serif;
   --sans:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;
@@ -23,7 +22,6 @@
   --ink:#EDEDE7; --ink2:#B0B0A8; --muted:#7C7C76;
   --rule:#32323A; --rule-strong:#4A4A54;
   --sente-soft:rgba(29,111,184,.22); --gote-soft:rgba(192,64,47,.22);
-  --win:#5DBA85; --lose:#F0554A;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
 }}
 :root[data-theme="dark"]{
@@ -31,7 +29,6 @@
   --ink:#EDEDE7; --ink2:#B0B0A8; --muted:#7C7C76;
   --rule:#32323A; --rule-strong:#4A4A54;
   --sente-soft:rgba(29,111,184,.22); --gote-soft:rgba(192,64,47,.22);
-  --win:#5DBA85; --lose:#F0554A;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
 }
 *{box-sizing:border-box}
@@ -71,7 +68,7 @@ h1{margin:0;font-family:var(--mincho);font-size:22px;font-weight:600;letter-spac
 .games .mk{font-family:var(--mincho);font-size:15px}
 .games .mk.b{color:var(--sente)} .games .mk.w{color:var(--gote)}
 .games .res{font-family:var(--mincho);font-weight:700;text-align:center}
-.games .res.win{color:var(--win)} .games .res.lose{color:var(--lose)} .games .res.draw{color:var(--muted)}
+.games .res.win{color:var(--sente)} .games .res.lose{color:var(--gote)} .games .res.draw{color:var(--muted)}
 .games .loss{text-align:right}
 @media(max-width:560px){
   .games{grid-template-columns:1fr auto auto auto}
