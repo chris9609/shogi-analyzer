@@ -87,6 +87,15 @@ h1{margin:0;font-family:var(--mincho);font-size:22px;font-weight:600;letter-spac
 .worst .g{font-size:12px;color:var(--muted);text-decoration:none;white-space:nowrap}
 .worst .g:hover{color:var(--ink)}
 
+/* 相手の段級で絞る */
+.filter{display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px;border-bottom:1px solid var(--rule)}
+.filter button{font:inherit;font-size:12px;color:var(--ink2);background:none;cursor:pointer;
+  border:1px solid var(--rule-strong);border-radius:999px;padding:3px 11px}
+.filter button small{color:var(--muted);margin-left:4px}
+.filter button:hover{background:var(--sunk)}
+.filter button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.filter button[aria-pressed="true"] small{color:inherit;opacity:.7}
+
 .note{font-size:11px;color:var(--muted);padding:9px 14px;border-top:1px solid var(--rule);line-height:1.6}
 .msg{padding:32px 14px;color:var(--ink2);text-align:center}
 .msg.err{color:var(--gote)}
@@ -108,6 +117,7 @@ h1{margin:0;font-family:var(--mincho);font-size:22px;font-weight:600;letter-spac
 
 <div class="card">
   <h2>対局</h2>
+  <div class="filter" id="filter" hidden></div>
   <div class="games" id="games"><div class="msg">読み込み中…</div></div>
   <p class="note">平均損失＝1手あたりに失った評価値（自分の手番のみ）。</p>
 </div>
@@ -141,50 +151,90 @@ try {
   // 自分の手だけに絞る（相手の悪手は振り返りの対象ではない）
   const mine = bad.filter(m => (m.side === "b" ? m.games.sente : m.games.gote) === ME);
 
-  // ── 一覧 ──
-  const rows = games.map(g => {
-    const me = mySide(g);
-    const opp = me === "b" ? g.gote : g.sente;
-    const oppRank = me === "b" ? g.gote_rank : g.sente_rank;
-    const res = !g.winner ? "draw" : g.winner === me ? "win" : "lose";
-    const resLabel = { win: "○", lose: "●", draw: "△" }[res];
-    const loss = me === "b" ? g.avg_loss_b : me === "w" ? g.avg_loss_w : g.avg_loss_b;
-    return `<a href="game.html?id=${g.id}" title="${esc(g.terminal || "")} ${g.moves_count}手">
-      <span class="d tnum">${fmtDate(g.played_at)}</span>
-      <span class="opp">${esc(opp)}<small>${esc(oppRank || "")}</small></span>
-      <span class="mk ${me || ""}">${me === "b" ? "先手" : me === "w" ? "後手" : "–"}</span>
-      <span class="res ${res}">${resLabel}</span>
-      <span class="loss tnum">${loss}</span>
-    </a>`;
+  // 2級以下はまとめる。低い級でも強い人（サブ垢など）が混ざるので、細かく分けても意味が薄い
+  const LOW = "2級以下";
+  const oppRankOf = g => {
+    const r = (mySide(g) === "b" ? g.gote_rank : g.sente_rank) || "";
+    return parseInt(r) >= 2 && r.endsWith("級") ? LOW : r;
+  };
+  // 弱い順に並べる。2級以下、1級、初段、二段…
+  const DAN = "初二三四五六七八九";
+  const strength = r => r === LOW ? -2 : /^(\d+)級$/.test(r) ? -parseInt(r) : DAN.includes(r[0]) && r.endsWith("段") ? DAN.indexOf(r[0]) : -99;
+
+  // ── 段級フィルタ ──（?rank=初段 で状態を持つので、対局を開いて戻っても残る）
+  const counts = {};
+  for (const g of games.filter(mySide)) { const r = oppRankOf(g); if (r) counts[r] = (counts[r] || 0) + 1; }
+  const ranks = Object.keys(counts).sort((a, b) => strength(a) - strength(b));
+  let rank = new URLSearchParams(location.search).get("rank");
+  if (!ranks.includes(rank)) rank = null;
+
+  function renderFilter() {
+    const chip = (r, label, n) =>
+      `<button type="button" data-rank="${esc(r)}" aria-pressed="${(rank || "") === r}">${esc(label)}<small class="tnum">${n}</small></button>`;
+    $("filter").innerHTML = chip("", "すべて", games.filter(mySide).length) + ranks.map(r => chip(r, r, counts[r])).join("");
+    $("filter").hidden = ranks.length < 2;
+  }
+  $("filter").addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    rank = b.dataset.rank || null;
+    const u = new URL(location.href);
+    rank ? u.searchParams.set("rank", rank) : u.searchParams.delete("rank");
+    history.replaceState(null, "", u);
+    render();
   });
-  $("games").innerHTML = games.length
-    ? `<div class="h"><span>日付</span><span>相手</span><span>手番</span><span>結果</span><span style="text-align:right">損失</span></div>` + rows.join("")
-    : `<div class="msg">まだ対局がありません（Mac で python3 sync.py）</div>`;
 
-  // ── まとめ ──
-  const played = games.filter(mySide);
-  const wins = played.filter(g => g.winner === mySide(g)).length;
-  const recent = played.slice(0, 10);
-  const avg = recent.length
-    ? Math.round(recent.reduce((s, g) => s + (mySide(g) === "b" ? g.avg_loss_b : g.avg_loss_w), 0) / recent.length) : 0;
-  $("sGames").textContent = played.length;
-  $("sWin").innerHTML = played.length ? `${Math.round(wins / played.length * 100)}<small>%</small>` : "–";
-  $("sLoss").textContent = avg;
-  $("stats").hidden = false;
+  function render() {
+    renderFilter();
+    const shown = rank ? games.filter(g => mySide(g) && oppRankOf(g) === rank) : games;
 
-  // ── 痛かった手 ──
-  const worst = mine.slice(0, 10);
-  $("worst").innerHTML = worst.length ? worst.map(m => {
-    const g = games.find(x => x.id === m.game_id);
-    // 相手は伏せているので、どの対局かは日付で示す
-    // ビューアの ply は「その手を指す前の局面」なので n-1 を開く
-    return `<li>
-      <span class="n tnum">${m.n}手目</span>
-      <span class="mv ${m.side}">${m.side === "b" ? "▲" : "△"}${esc(m.kif)}</span>
-      <span class="l tnum">−${m.loss}</span>
-      <a class="g" href="game.html?id=${m.game_id}&ply=${m.n - 1}">${g ? fmtDate(g.played_at) : ""} →</a>
-    </li>`;
-  }).join("") : `<li class="msg">まだありません</li>`;
+    // ── 一覧 ──
+    const rows = shown.map(g => {
+      const me = mySide(g);
+      const opp = me === "b" ? g.gote : g.sente;
+      const oppRank = me === "b" ? g.gote_rank : g.sente_rank;
+      const res = !g.winner ? "draw" : g.winner === me ? "win" : "lose";
+      const resLabel = { win: "○", lose: "●", draw: "△" }[res];
+      const loss = me === "b" ? g.avg_loss_b : me === "w" ? g.avg_loss_w : g.avg_loss_b;
+      return `<a href="game.html?id=${g.id}" title="${esc(g.terminal || "")} ${g.moves_count}手">
+        <span class="d tnum">${fmtDate(g.played_at)}</span>
+        <span class="opp">${esc(opp)}<small>${esc(oppRank || "")}</small></span>
+        <span class="mk ${me || ""}">${me === "b" ? "先手" : me === "w" ? "後手" : "–"}</span>
+        <span class="res ${res}">${resLabel}</span>
+        <span class="loss tnum">${loss}</span>
+      </a>`;
+    });
+    $("games").innerHTML = shown.length
+      ? `<div class="h"><span>日付</span><span>相手</span><span>手番</span><span>結果</span><span style="text-align:right">損失</span></div>` + rows.join("")
+      : `<div class="msg">まだ対局がありません（Mac で python3 sync.py）</div>`;
+
+    // ── まとめ ──
+    const played = shown.filter(mySide);
+    const wins = played.filter(g => g.winner === mySide(g)).length;
+    const recent = played.slice(0, 10);
+    const avg = recent.length
+      ? Math.round(recent.reduce((s, g) => s + (mySide(g) === "b" ? g.avg_loss_b : g.avg_loss_w), 0) / recent.length) : 0;
+    $("sGames").innerHTML = rank ? `${played.length}<small> ${wins}勝${played.length - wins}敗</small>` : played.length;
+    $("sWin").innerHTML = played.length ? `${Math.round(wins / played.length * 100)}<small>%</small>` : "–";
+    $("sLoss").textContent = avg;
+    $("stats").hidden = false;
+
+    // ── 痛かった手 ──
+    const ids = new Set(shown.map(g => g.id));
+    const worst = mine.filter(m => ids.has(m.game_id)).slice(0, 10);
+    $("worst").innerHTML = worst.length ? worst.map(m => {
+      const g = games.find(x => x.id === m.game_id);
+      // 相手は伏せているので、どの対局かは日付で示す
+      // ビューアの ply は「その手を指す前の局面」なので n-1 を開く
+      return `<li>
+        <span class="n tnum">${m.n}手目</span>
+        <span class="mv ${m.side}">${m.side === "b" ? "▲" : "△"}${esc(m.kif)}</span>
+        <span class="l tnum">−${m.loss}</span>
+        <a class="g" href="game.html?id=${m.game_id}&ply=${m.n - 1}">${g ? fmtDate(g.played_at) : ""} →</a>
+      </li>`;
+    }).join("") : `<li class="msg">まだありません</li>`;
+  }
+  render();
 } catch (err) {
   $("games").innerHTML = `<div class="msg err">${esc(err.message)}</div>`;
   $("worst").innerHTML = "";
