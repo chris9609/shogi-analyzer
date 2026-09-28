@@ -54,7 +54,7 @@ h1{margin:0;font-family:var(--mincho);font-size:22px;font-weight:600;letter-spac
   text-transform:uppercase;color:var(--muted);font-weight:600;border-bottom:1px solid var(--rule)}
 
 /* 対局一覧：1行＝1局。狭い画面では列を畳む */
-.games{display:grid;grid-template-columns:auto 1fr auto auto auto;align-items:center}
+.games{display:grid;grid-template-columns:auto 1fr auto auto auto auto;align-items:center}
 .games>a,.games>.h{display:contents}
 .games>.h>span{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
   padding:8px 10px;border-bottom:1px solid var(--rule)}
@@ -65,13 +65,14 @@ h1{margin:0;font-family:var(--mincho);font-size:22px;font-weight:600;letter-spac
 .games .d{font-size:12px;color:var(--ink2)}
 .games .opp{font-family:var(--mincho);font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis}
 .games .opp small{font-size:11px;color:var(--muted);font-family:var(--sans);font-weight:400;margin-left:6px}
+.games .op{font-size:12px;color:var(--ink2)}
 .games .mk{font-family:var(--mincho);font-size:15px}
 .games .mk.b{color:var(--sente)} .games .mk.w{color:var(--gote)}
 .games .res{font-family:var(--mincho);font-weight:700;text-align:center}
 .games .res.win{color:var(--sente)} .games .res.lose{color:var(--gote)} .games .res.draw{color:var(--muted)}
 .games .loss{text-align:right}
 @media(max-width:560px){
-  .games{grid-template-columns:1fr auto auto auto}
+  .games{grid-template-columns:1fr auto auto auto auto}
   .games .d{display:none}
   .games .opp small{display:block;margin:0}
 }
@@ -142,7 +143,7 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;
 try {
   // 一覧に要る列だけ取る（data は1局50KBあるので、ここでは読まない）
   const [games, bad] = await Promise.all([
-    rest("games?select=id,played_at,sente,gote,sente_rank,gote_rank,winner,terminal,moves_count,avg_loss_b,avg_loss_w&order=played_at.desc"),
+    rest("games?select=id,played_at,sente,gote,sente_rank,gote_rank,winner,opening_b,opening_w,terminal,moves_count,avg_loss_b,avg_loss_w&order=played_at.desc"),
     restAll("moves?select=game_id,n,side,kif,loss,grade,games(sente,gote)&grade=in.(dubious,mistake,blunder)&order=loss.desc,game_id,n"),
   ]);
   // 相手のIDは表示しない（db.js の mask）。自分かどうかの判定は ME が残るので変わらない
@@ -167,12 +168,18 @@ try {
   const all = games.filter(mySide);
   const ranks = [...new Set(all.map(oppRankOf).filter(Boolean))].sort((a, b) => strength(a) - strength(b));
   const q = new URLSearchParams(location.search);
-  const f = { rank: q.get("rank"), side: q.get("side") };
+  // 相手の戦型。列が空の局（sync.py --all の前に送った局）は「不明」
+  const oppOpeningOf = g => (mySide(g) === "b" ? g.opening_w : g.opening_b) || "不明";
+  const ORDER = ["居飛車", "中飛車", "四間飛車", "三間飛車", "向かい飛車", "不明"];
+  const openings = [...new Set(all.map(oppOpeningOf))].sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
+  const f = { rank: q.get("rank"), side: q.get("side"), op: q.get("op") };
   if (!ranks.includes(f.rank)) f.rank = null;
+  if (!openings.includes(f.op)) f.op = null;
   if (!["b", "w"].includes(f.side)) f.side = null;
 
-  const pick = ({ rank = f.rank, side = f.side } = {}) =>
-    all.filter(g => (!rank || oppRankOf(g) === rank) && (!side || mySide(g) === side));
+  const pick = ({ rank = f.rank, side = f.side, op = f.op } = {}) =>
+    all.filter(g => (!rank || oppRankOf(g) === rank) && (!side || mySide(g) === side)
+      && (!op || oppOpeningOf(g) === op));
 
   function renderFilter() {
     const chip = (key, val, label, n) =>
@@ -182,7 +189,9 @@ try {
         + chip("side", "b", "先手", pick({ side: "b" }).length)
         + chip("side", "w", "後手", pick({ side: "w" }).length) + `</div>`
       + `<div>` + chip("rank", "", "すべて", pick({ rank: null }).length)
-        + ranks.map(r => chip("rank", r, r, pick({ rank: r }).length)).join("") + `</div>`;
+        + ranks.map(r => chip("rank", r, r, pick({ rank: r }).length)).join("") + `</div>`
+      + `<div>` + chip("op", "", "相手の戦型すべて", pick({ op: null }).length)
+        + openings.map(o => chip("op", o, o, pick({ op: o }).length)).join("") + `</div>`;
     $("filter").hidden = false;
   }
   $("filter").addEventListener("click", e => {
@@ -197,7 +206,7 @@ try {
 
   function render() {
     renderFilter();
-    const filtered = f.rank || f.side;
+    const filtered = f.rank || f.side || f.op;
     const shown = filtered ? pick() : games;
 
     // ── 一覧 ──
@@ -211,13 +220,14 @@ try {
       return `<a href="game.html?id=${g.id}" title="${esc(g.terminal || "")} ${g.moves_count}手">
         <span class="d tnum">${fmtDate(g.played_at)}</span>
         <span class="opp">${esc(opp)}<small>${esc(oppRank || "")}</small></span>
+        <span class="op">${esc(me ? oppOpeningOf(g) : "")}</span>
         <span class="mk ${me || ""}">${me === "b" ? "先手" : me === "w" ? "後手" : "–"}</span>
         <span class="res ${res}">${resLabel}</span>
         <span class="loss tnum">${loss}</span>
       </a>`;
     });
     $("games").innerHTML = shown.length
-      ? `<div class="h"><span>日付</span><span>相手</span><span>手番</span><span>結果</span><span style="text-align:right">損失</span></div>` + rows.join("")
+      ? `<div class="h"><span>日付</span><span>相手</span><span>戦型</span><span>手番</span><span>結果</span><span style="text-align:right">損失</span></div>` + rows.join("")
       : `<div class="msg">まだ対局がありません（Mac で python3 sync.py）</div>`;
 
     // ── まとめ ──

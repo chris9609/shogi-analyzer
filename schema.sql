@@ -44,6 +44,9 @@ create table if not exists moves (
 
 -- 2026-09-19 に kif 列を足した。それより前に作ったテーブルにも効くように
 alter table games add column if not exists kif text;
+-- 2026-09-28 に戦型を足した。opening.py が序盤の飛車の位置から判定する（居飛車 / 三間飛車 …）
+alter table games add column if not exists opening_b text;
+alter table games add column if not exists opening_w text;
 
 create index if not exists moves_loss_idx on moves (loss desc);
 create index if not exists games_played_at_idx on games (played_at desc);
