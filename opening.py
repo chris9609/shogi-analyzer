@@ -28,7 +28,7 @@ def classify(moves):
     furi = {"b": None, "w": None}  # 最後に振っていた筋（先手視点）
 
     for mv in moves[:WINDOW]:
-        usi = mv["usi"]
+        usi = mv.get("usi")  # 終局手（投了など）は JSON に usi が無い
         if not usi or "*" in usi:
             continue
         src, dest = usi[:2], usi[2:4]
