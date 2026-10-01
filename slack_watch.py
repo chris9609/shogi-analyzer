@@ -43,6 +43,8 @@ LOCK = OUT / "slack_watch.lock"
 # MCPサーバ（AI秘書）が使っているものを借りる
 ENV_FILE = Path.home() / "claude/application/MCP/.env"
 DEFAULT_CHANNEL = "#将棋"
+# Supabase への送信失敗など、対局のスレッドに書く先が無いエラーはここへ（~/cron/auto_push.sh と同じ）
+ERROR_CHANNEL = "C0BEQ1A52HX"  # #エラー
 
 
 def log(msg):
@@ -417,6 +419,15 @@ def main():
     if not args.dry_run:
         ok, out = run([sys.executable, "sync.py"])
         log(("Supabase: " if ok else "Supabase 送信に失敗: ") + out.strip().replace("\n", " / ")[-300:])
+        # ✅ は解析が済んだ時点で付くので、ここで落ちてもSlackからは見えない。
+        # 9/29〜10/1 に3日気づかなかったので、#エラー に知らせる
+        if not ok:
+            try:
+                sl.post(ERROR_CHANNEL, ":rotating_light: 将棋: Supabase への送信に失敗しました\n"
+                                       f"```{scrub(out)[-800:]}```\n"
+                                       "ログ: ~/cron/logs/shogi-watch.log")
+            except Exception as e:
+                log(f"#エラー への通知にも失敗: {e!r}")
 
 
 if __name__ == "__main__":
