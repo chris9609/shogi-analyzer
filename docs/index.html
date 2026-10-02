@@ -73,7 +73,6 @@ h1{margin:0;font-family:var(--mincho);font-size:22px;font-weight:600;letter-spac
 .games>a:hover>span{background:var(--sunk)}
 .games .d{font-size:12px;color:var(--ink2)}
 .games .opp{font-family:var(--mincho);font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis}
-.games .opp small{font-size:11px;color:var(--muted);font-family:var(--sans);font-weight:400;margin-left:6px}
 .games .op{font-size:12px;color:var(--ink2)}
 .games .mk{font-family:var(--mincho);font-size:15px}
 .games .mk.b{color:var(--sente)} .games .mk.w{color:var(--gote)}
@@ -83,7 +82,6 @@ h1{margin:0;font-family:var(--mincho);font-size:22px;font-weight:600;letter-spac
 @media(max-width:560px){
   .games{grid-template-columns:1fr auto auto auto auto}
   .games .d{display:none}
-  .games .opp small{display:block;margin:0}
 }
 
 /* 相手の段級で絞る */
@@ -226,14 +224,13 @@ try {
     };
     const row = g => {
       const me = mySide(g);
-      const opp = me === "b" ? g.gote : g.sente;
       const oppRank = me === "b" ? g.gote_rank : g.sente_rank;
       const res = !g.winner ? "draw" : g.winner === me ? "win" : "lose";
       const resLabel = { win: "○", lose: "●", draw: "△" }[res];
       const loss = me === "b" ? g.avg_loss_b : me === "w" ? g.avg_loss_w : g.avg_loss_b;
       return `<a href="game.html?id=${g.id}"${open.has(monthKey(g.played_at)) ? "" : " hidden"} title="${esc(g.terminal || "")} ${g.moves_count}手">
         <span class="d tnum">${fmtDate(g.played_at)}</span>
-        <span class="opp">${esc(opp)}<small>${esc(oppRank || "")}</small></span>
+        <span class="opp">${esc(oppRank || "–")}</span>
         <span class="op">${esc(me ? oppOpeningOf(g) : "")}</span>
         <span class="mk ${me || ""}">${me === "b" ? "先手" : me === "w" ? "後手" : "–"}</span>
         <span class="res ${res}">${resLabel}</span>
