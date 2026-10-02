@@ -60,6 +60,15 @@ h1{margin:0;font-family:var(--mincho);font-size:22px;font-weight:600;letter-spac
   padding:8px 10px;border-bottom:1px solid var(--rule)}
 .games>a>span{padding:9px 10px;border-bottom:1px solid var(--rule);white-space:nowrap}
 .games>a:last-child>span{border-bottom:0}
+.games>a[hidden]{display:none}
+/* 月の見出し。押すとその月を開閉する */
+.games>.m{grid-column:1/-1;display:flex;align-items:baseline;gap:10px;width:100%;
+  font:inherit;text-align:left;color:var(--ink);background:var(--sunk);cursor:pointer;
+  border:0;border-bottom:1px solid var(--rule);padding:8px 10px}
+.games>.m:hover{background:var(--rule)}
+.games>.m b{font-family:var(--mincho);font-size:15px;font-weight:600}
+.games>.m small{font-size:12px;color:var(--ink2)}
+.games>.m i{font-style:normal;font-size:10px;color:var(--muted);width:10px}
 .games>a{text-decoration:none}
 .games>a:hover>span{background:var(--sunk)}
 .games .d{font-size:12px;color:var(--ink2)}
@@ -137,6 +146,9 @@ const $ = id => document.getElementById(id);
 $("who").textContent = ME;
 
 const mySide = g => g.sente === ME ? "b" : g.gote === ME ? "w" : null;
+// 月の区切り。今年なら「9月」、去年以前は「2025年12月」
+const monthKey = iso => { const d = new Date(iso); return `${d.getFullYear()}-${d.getMonth() + 1}`; };
+const monthLabel = key => { const [y, m] = key.split("-"); return +y === new Date().getFullYear() ? `${m}月` : `${y}年${m}月`; };
 const fmtDate = iso => { const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()}`; };
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
@@ -194,6 +206,20 @@ try {
         + openings.map(o => chip("op", o, o, pick({ op: o }).length)).join("") + `</div>`;
     $("filter").hidden = false;
   }
+  // 開いている月（?open=2026-9,2026-8）。指定がなければ最新の月だけ開く
+  const open = new Set(q.has("open") ? q.get("open").split(",").filter(Boolean)
+    : games.length ? [monthKey(games[0].played_at)] : []);
+  $("games").addEventListener("click", e => {
+    const b = e.target.closest("button.m");
+    if (!b) return;
+    const k = b.dataset.month;
+    open.has(k) ? open.delete(k) : open.add(k);
+    const u = new URL(location.href);
+    u.searchParams.set("open", [...open].join(","));
+    history.replaceState(null, "", u);
+    render();
+  });
+
   $("filter").addEventListener("click", e => {
     const b = e.target.closest("button");
     if (!b) return;
@@ -209,15 +235,27 @@ try {
     const filtered = f.rank || f.side || f.op;
     const shown = filtered ? pick() : games;
 
-    // ── 一覧 ──
-    const rows = shown.map(g => {
+    // ── 一覧 ── 月ごとに見出しを挟み、閉じている月の行は隠す
+    const byMonth = new Map();
+    for (const g of shown) {
+      const k = monthKey(g.played_at);
+      byMonth.has(k) || byMonth.set(k, []);
+      byMonth.get(k).push(g);
+    }
+    const monthHead = (k, gs) => {
+      const w = gs.filter(g => mySide(g) && g.winner === mySide(g)).length;
+      const l = gs.filter(g => mySide(g) && g.winner && g.winner !== mySide(g)).length;
+      return `<button type="button" class="m" data-month="${k}" aria-expanded="${open.has(k)}">
+        <i>${open.has(k) ? "▼" : "▶"}</i><b>${monthLabel(k)}</b><small class="tnum">${gs.length}局 ${w}勝${l}敗</small></button>`;
+    };
+    const row = g => {
       const me = mySide(g);
       const opp = me === "b" ? g.gote : g.sente;
       const oppRank = me === "b" ? g.gote_rank : g.sente_rank;
       const res = !g.winner ? "draw" : g.winner === me ? "win" : "lose";
       const resLabel = { win: "○", lose: "●", draw: "△" }[res];
       const loss = me === "b" ? g.avg_loss_b : me === "w" ? g.avg_loss_w : g.avg_loss_b;
-      return `<a href="game.html?id=${g.id}" title="${esc(g.terminal || "")} ${g.moves_count}手">
+      return `<a href="game.html?id=${g.id}"${open.has(monthKey(g.played_at)) ? "" : " hidden"} title="${esc(g.terminal || "")} ${g.moves_count}手">
         <span class="d tnum">${fmtDate(g.played_at)}</span>
         <span class="opp">${esc(opp)}<small>${esc(oppRank || "")}</small></span>
         <span class="op">${esc(me ? oppOpeningOf(g) : "")}</span>
@@ -225,7 +263,8 @@ try {
         <span class="res ${res}">${resLabel}</span>
         <span class="loss tnum">${loss}</span>
       </a>`;
-    });
+    };
+    const rows = [...byMonth].map(([k, gs]) => monthHead(k, gs) + gs.map(row).join(""));
     $("games").innerHTML = shown.length
       ? `<div class="h"><span>日付</span><span>相手</span><span>戦型</span><span>手番</span><span>結果</span><span style="text-align:right">損失</span></div>` + rows.join("")
       : `<div class="msg">まだ対局がありません（Mac で python3 sync.py）</div>`;
