@@ -19,22 +19,6 @@ export async function rest(path) {
   return r.json();
 }
 
-// PostgREST は既定で最大1000行しか返さない。超えた分が黙って落ちると
-// 一覧の悪手の数が古い局から欠けていくので、全部読み切るまでページを送る
-export async function restAll(path, page = 1000) {
-  const out = [];
-  for (let from = 0; ; from += page) {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
-                 Range: `${from}-${from + page - 1}` },
-    });
-    if (!r.ok) throw new Error(`Supabase ${r.status}: ${(await r.text()).slice(0, 200)}`);
-    const rows = await r.json();
-    out.push(...rows);
-    if (rows.length < page) return out;
-  }
-}
-
 // 1局ぶんの解析JSON（export.py が吐いたもの）。ビューアはこれをそのまま使う
 export async function loadGame(id) {
   if (!id || !/^\d{8}_\d{4}$/.test(id)) throw new Error("URL に ?id=20260918_1130 の形で対局を指定してください");

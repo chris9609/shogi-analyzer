@@ -86,17 +86,6 @@ h1{margin:0;font-family:var(--mincho);font-size:22px;font-weight:600;letter-spac
   .games .opp small{display:block;margin:0}
 }
 
-/* 痛かった手 */
-.worst{list-style:none;margin:0;padding:0}
-.worst li{display:flex;align-items:baseline;gap:12px;padding:9px 14px;border-bottom:1px solid var(--rule)}
-.worst li:last-child{border-bottom:0}
-.worst .n{font-size:11px;color:var(--muted);width:56px;flex:none}
-.worst .mv{font-family:var(--mincho);font-size:16px;font-weight:600}
-.worst .mv.b{color:var(--sente)} .worst .mv.w{color:var(--gote)}
-.worst .l{margin-left:auto;font-family:var(--mincho);font-weight:700;color:var(--gote)}
-.worst .g{font-size:12px;color:var(--muted);text-decoration:none;white-space:nowrap}
-.worst .g:hover{color:var(--ink)}
-
 /* 相手の段級で絞る */
 .filter{display:flex;flex-direction:column;gap:8px;padding:10px 14px;border-bottom:1px solid var(--rule)}
 .filter>div{display:flex;flex-wrap:wrap;gap:6px}
@@ -132,16 +121,10 @@ h1{margin:0;font-family:var(--mincho);font-size:22px;font-weight:600;letter-spac
   <div class="games" id="games"><div class="msg">読み込み中…</div></div>
   <p class="note">平均損失＝1手あたりに失った評価値（自分の手番のみ）。</p>
 </div>
-
-<div class="card">
-  <h2>痛かった手</h2>
-  <ul class="worst" id="worst"><li class="msg">読み込み中…</li></ul>
-  <p class="note">自分の手の中で損失が大きかった順。押すとその局面が開く。</p>
-</div>
 </div>
 
 <script type="module">
-import { rest, restAll, ME, mask } from "./db.js";
+import { rest, ME, mask } from "./db.js";
 const $ = id => document.getElementById(id);
 $("who").textContent = ME;
 
@@ -154,16 +137,9 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;
 
 try {
   // 一覧に要る列だけ取る（data は1局50KBあるので、ここでは読まない）
-  const [games, bad] = await Promise.all([
-    rest("games?select=id,played_at,sente,gote,sente_rank,gote_rank,winner,opening_b,opening_w,terminal,moves_count,avg_loss_b,avg_loss_w&order=played_at.desc"),
-    restAll("moves?select=game_id,n,side,kif,loss,grade,games(sente,gote)&grade=in.(dubious,mistake,blunder)&order=loss.desc,game_id,n"),
-  ]);
+  const games = await rest("games?select=id,played_at,sente,gote,sente_rank,gote_rank,winner,opening_b,opening_w,terminal,moves_count,avg_loss_b,avg_loss_w&order=played_at.desc");
   // 相手のIDは表示しない（db.js の mask）。自分かどうかの判定は ME が残るので変わらない
   for (const g of games) { g.sente = mask(g.sente); g.gote = mask(g.gote); }
-  for (const m of bad) { m.games.sente = mask(m.games.sente); m.games.gote = mask(m.games.gote); }
-
-  // 自分の手だけに絞る（相手の悪手は振り返りの対象ではない）
-  const mine = bad.filter(m => (m.side === "b" ? m.games.sente : m.games.gote) === ME);
 
   // 2級以下はまとめる。低い級でも強い人（サブ垢など）が混ざるので、細かく分けても意味が薄い
   const LOW = "2級以下";
@@ -279,26 +255,10 @@ try {
     $("sWin").innerHTML = played.length ? `${Math.round(wins / played.length * 100)}<small>%</small>` : "–";
     $("sLoss").textContent = avg;
     $("stats").hidden = false;
-
-    // ── 痛かった手 ──
-    const ids = new Set(shown.map(g => g.id));
-    const worst = mine.filter(m => ids.has(m.game_id)).slice(0, 10);
-    $("worst").innerHTML = worst.length ? worst.map(m => {
-      const g = games.find(x => x.id === m.game_id);
-      // 相手は伏せているので、どの対局かは日付で示す
-      // ビューアの ply は「その手を指す前の局面」なので n-1 を開く
-      return `<li>
-        <span class="n tnum">${m.n}手目</span>
-        <span class="mv ${m.side}">${m.side === "b" ? "▲" : "△"}${esc(m.kif)}</span>
-        <span class="l tnum">−${m.loss}</span>
-        <a class="g" href="game.html?id=${m.game_id}&ply=${m.n - 1}">${g ? fmtDate(g.played_at) : ""} →</a>
-      </li>`;
-    }).join("") : `<li class="msg">まだありません</li>`;
   }
   render();
 } catch (err) {
   $("games").innerHTML = `<div class="msg err">${esc(err.message)}</div>`;
-  $("worst").innerHTML = "";
   console.error(err);
 }
 </script>
