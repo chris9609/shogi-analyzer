@@ -226,7 +226,7 @@ try {
       const me = mySide(g);
       const oppRank = me === "b" ? g.gote_rank : g.sente_rank;
       const res = !g.winner ? "draw" : g.winner === me ? "win" : "lose";
-      const resLabel = { win: "○", lose: "●", draw: "△" }[res];
+      const resLabel = { win: "●", lose: "●", draw: "△" }[res];
       const loss = me === "b" ? g.avg_loss_b : me === "w" ? g.avg_loss_w : g.avg_loss_b;
       return `<a href="game.html?id=${g.id}"${open.has(monthKey(g.played_at)) ? "" : " hidden"} title="${esc(g.terminal || "")} ${g.moves_count}手">
         <span class="d tnum">${fmtDate(g.played_at)}</span>
