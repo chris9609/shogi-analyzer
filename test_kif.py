@@ -142,6 +142,23 @@ check("浮き飛車の横移動は振ったことにしない",
       {"b": "居飛車", "w": "居飛車"})
 
 
+# ── 囲い判定（castle.py） ──────────────────────────────────────
+import castle
+
+INIT = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1"
+FUNE = "ln1g1gsnl/1ks2r1b1/ppppppppp/9/9/9/PPPPPPPPP/1BK4R1/LNSG1GSNL b - 1"  # ▲舟囲い △美濃
+MINO = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B4SK1/LNSG1G1NL b - 1"     # ▲美濃
+TAKA = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPGPPP/1B4SK1/LNS2G1NL b - 1"      # ▲高美濃
+NIGE = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPGKPP/1B4S2/LNS2G1NL b - 1"       # ▲玉が3七へ逃げた
+
+check("動かなければ居玉", castle.classify([INIT]), {"b": "居玉", "w": "居玉"})
+check("後手は盤を回して見る（８二玉・７二銀・６一金＝美濃）",
+      castle.classify([INIT, FUNE]), {"b": "舟囲い", "w": "美濃"})
+check("美濃→高美濃は後の形", castle.classify([INIT, MINO, TAKA])["b"], "高美濃")
+check("崩れても組んだ形が残る", castle.classify([INIT, TAKA, NIGE])["b"], "高美濃")
+check("囲いに入らず居玉でもなければその他", castle.classify([INIT, NIGE])["b"], "その他")
+
+
 if fails:
     print(f"✗ {len(fails)}件 失敗\n")
     for f in fails:

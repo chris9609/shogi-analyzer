@@ -22,6 +22,7 @@ import urllib.request
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
+import castle
 import opening
 
 HERE = Path(__file__).parent
@@ -137,6 +138,7 @@ def to_rows(game_id, data):
     played = [m for m in moves if not m["terminal"]]
     ei = data.get("engineInfo", {})
     style = opening.classify(moves)
+    kakoi = castle.classify([p["sfen"] for p in data["positions"]])
     pa = played_at(data["header"])
     if pa is None:
         raise ValueError(f"開始日時が読めません: {data['header'].get('開始日時')!r}")
@@ -151,6 +153,7 @@ def to_rows(game_id, data):
         "terminal": moves[-1]["kif"] if moves and moves[-1]["terminal"] else None,
         "winner": winner(moves),
         "opening_b": style["b"], "opening_w": style["w"],
+        "castle_b": kakoi["b"], "castle_w": kakoi["w"],
         "avg_loss_b": data["avgLoss"]["b"], "avg_loss_w": data["avgLoss"]["w"],
         "engine": ei.get("engine"), "eval_mode": ei.get("evalMode"),
         "eval_file": ei.get("evalFile"), "movetime": ei.get("movetime"),

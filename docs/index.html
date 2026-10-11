@@ -94,6 +94,11 @@ h1{margin:0;font-family:var(--mincho);font-size:22px;font-weight:600;letter-spac
 .filter button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
 .filter button[aria-pressed="true"] small{color:inherit;opacity:.7}
 
+/* 相手の囲い別の成績。絞り込みに連動する */
+.castle{display:flex;flex-wrap:wrap;gap:4px 16px;padding:9px 14px;border-bottom:1px solid var(--rule);font-size:12px;color:var(--ink2)}
+.castle .k{color:var(--muted);letter-spacing:.06em}
+.castle b{font-weight:600;color:var(--ink)}
+
 .note{font-size:11px;color:var(--muted);padding:9px 14px;border-top:1px solid var(--rule);line-height:1.6}
 .msg{padding:32px 14px;color:var(--ink2);text-align:center}
 .msg.err{color:var(--gote)}
@@ -116,6 +121,7 @@ h1{margin:0;font-family:var(--mincho);font-size:22px;font-weight:600;letter-spac
 <div class="card">
   <h2>対局</h2>
   <div class="filter" id="filter" hidden></div>
+  <div class="castle" id="castle" hidden></div>
   <div class="games" id="games"><div class="msg">読み込み中…</div></div>
   <p class="note">平均損失＝1手あたりに失った評価値（自分の手番のみ）。</p>
 </div>
@@ -135,7 +141,7 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;
 
 try {
   // 一覧に要る列だけ取る（data は1局50KBあるので、ここでは読まない）
-  const games = await rest("games?select=id,played_at,sente,gote,sente_rank,gote_rank,winner,opening_b,opening_w,terminal,moves_count,avg_loss_b,avg_loss_w&order=played_at.desc");
+  const games = await rest("games?select=id,played_at,sente,gote,sente_rank,gote_rank,winner,opening_b,opening_w,castle_b,castle_w,terminal,moves_count,avg_loss_b,avg_loss_w&order=played_at.desc");
   // 相手のIDは表示しない（db.js の mask）。自分かどうかの判定は ME が残るので変わらない
   for (const g of games) { g.sente = mask(g.sente); g.gote = mask(g.gote); }
 
@@ -252,6 +258,19 @@ try {
     $("sWin").innerHTML = played.length ? `${Math.round(wins / played.length * 100)}<small>%</small>` : "–";
     $("sLoss").textContent = avg;
     $("stats").hidden = false;
+
+    // ── 相手の囲い別 ── 局数の多い順。その他・不明（sync.py --all の前に送った局）は後ろ
+    const tally = new Map();
+    for (const g of played) {
+      const k = (mySide(g) === "b" ? g.castle_w : g.castle_b) || "不明";
+      tally.has(k) || tally.set(k, [0, 0]);
+      if (g.winner) tally.get(k)[g.winner === mySide(g) ? 0 : 1]++;
+    }
+    const last = k => ["その他", "不明"].indexOf(k) + 1;
+    const castles = [...tally].sort(([a, x], [b, y]) => last(a) - last(b) || (y[0] + y[1]) - (x[0] + x[1]));
+    $("castle").innerHTML = `<span class="k">相手の囲い</span>`
+      + castles.map(([k, [w, l]]) => `<span>${esc(k)} <b class="tnum">${w}勝${l}敗</b></span>`).join("");
+    $("castle").hidden = !played.length;
   }
   render();
 } catch (err) {

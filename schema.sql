@@ -47,6 +47,9 @@ alter table games add column if not exists kif text;
 -- 2026-09-28 に戦型を足した。opening.py が序盤の飛車の位置から判定する（居飛車 / 三間飛車 …）
 alter table games add column if not exists opening_b text;
 alter table games add column if not exists opening_w text;
+-- 2026-10-11 に囲いを足した。castle.py が序盤の玉・金・銀の配置から判定する（舟囲い / 美濃 / 居玉 …）
+alter table games add column if not exists castle_b text;
+alter table games add column if not exists castle_w text;
 
 create index if not exists moves_loss_idx on moves (loss desc);
 create index if not exists games_played_at_idx on games (played_at desc);
