@@ -85,11 +85,13 @@ header{display:flex;flex-wrap:wrap;gap:20px 32px;align-items:flex-end;
   font-size:15px;flex-wrap:wrap}
 .hand .lab{font-size:10px;letter-spacing:.1em;color:var(--muted);
   font-family:var(--sans);min-width:52px}
-.hand.b .pc{color:var(--sente)} .hand.w .pc{color:var(--gote)}
-.hand .pc{border:1px solid currentColor;border-radius:2px;padding:1px 5px;font-size:13px}
-.hand .pc sub{font-size:10px;vertical-align:baseline;margin-left:1px}
+/* 持ち駒も盤と同じ駒の形で出す。枚数だけ先後の色 */
+.hand.b .pc sub{color:var(--sente)} .hand.w .pc sub{color:var(--gote)}
+.hand .pc{display:inline-flex;align-items:flex-end}
+.hand .pc .koma{width:28px;height:32px;font-size:16px}
+.hand .pc sub{font-size:12px;line-height:1;margin-left:2px;font-weight:600}
 .hand .none{color:var(--muted);font-size:12px;font-family:var(--sans)}
-.boardbox{position:relative;margin:10px 0}
+.boardbox{position:relative;margin:18px 0 10px}
 .files,.ranks{position:absolute;display:grid;color:var(--ink2);font-size:10px;
   font-family:var(--mincho)}
 .files{top:-15px;left:0;right:0;grid-template-columns:repeat(9,1fr);text-align:center}
@@ -573,15 +575,16 @@ function renderBoard(){
     }
   }
 
-  const handHtml = side => {
+  // 上の持ち駒は盤の上側の駒と同じく逆さにする
+  const handHtml = (side, top) => {
     const h = hands[side];
     const parts = [...HAND_ORDER].filter(l => h[l]).map(l =>
-      `<span class="pc">${KANJI[l]}${h[l] > 1 ? `<sub>${h[l]}</sub>` : ""}</span>`);
+      `<span class="pc"><span class="koma${top ? " w" : ""}">${KANJI[l]}</span>${h[l] > 1 ? `<sub>${h[l]}</sub>` : ""}</span>`);
     return parts.length ? parts.join("") : `<span class="none">なし</span>`;
   };
   const topSide = flipped ? "b" : "w", botSide = flipped ? "w" : "b";
   const label = s => (s === "b" ? "▲" : "△") + (s === "b" ? DATA.sente : DATA.gote);
-  const top = `<span class="lab">${label(topSide)}</span>` + handHtml(topSide);
+  const top = `<span class="lab">${label(topSide)}</span>` + handHtml(topSide, true);
   const bot = `<span class="lab">${label(botSide)}</span>` + handHtml(botSide);
   $("handTop").className = "hand " + topSide;
   $("handBottom").className = "hand " + botSide;
