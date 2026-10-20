@@ -622,8 +622,20 @@ function renderChart(){
         font-size="9.5" fill="var(--muted)" class="tnum">${i}</text>`);
   }
 
-  const dots = pts.map(p =>
-    `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.2" fill="var(--chart)"/>`).join("");
+  // 詰みは±2000に張り付いて普通の大差と見分けられないので、点をひし形にして
+  // 詰みが出始めた手に「詰」と書く
+  const dots = pts.map((p, i) => {
+    const x = p[0].toFixed(1), y = p[1].toFixed(1);
+    const cp = DATA.positions[i].cp;
+    if (!isMate(cp)) return `<circle cx="${x}" cy="${y}" r="2.2" fill="var(--chart)"/>`;
+    let s = `<path d="M${x} ${p[1]-4.5}L${p[0]+4.5} ${y}L${x} ${p[1]+4.5}L${p[0]-4.5} ${y}Z" fill="var(--chart)"/>`;
+    if (!i || !isMate(DATA.positions[i-1].cp)){
+      const up = myCp(cp) > 0;
+      s += `<text x="${x}" y="${up ? p[1] + 17 : p[1] - 9}" text-anchor="middle"
+        font-size="11" font-weight="700" fill="var(--chart)" font-family="var(--mincho)">詰</text>`;
+    }
+    return s;
+  }).join("");
 
   // 悪手の印はグラフには打たない。1手ごとの点と重なって読めなくなる。棋譜欄と棋神の行にある
 
