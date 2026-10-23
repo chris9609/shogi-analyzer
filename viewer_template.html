@@ -191,22 +191,6 @@ svg{display:block;width:100%;height:auto;overflow:visible}
 .big{font-family:var(--mincho);font-size:30px;font-weight:600;line-height:1}
 .big.b{color:var(--sente)} .big.w{color:var(--gote)}
 
-/* ── movelist ─────────────────────────── */
-.moves{max-height:270px;overflow-y:auto}
-.mv{display:grid;grid-template-columns:34px 20px 1fr 62px 34px;gap:8px;align-items:center;
-  padding:4px 14px;cursor:pointer;border:0;background:none;width:100%;text-align:left;
-  color:var(--ink);border-radius:0}
-.mv:hover{background:var(--sunk)}
-.mv[aria-current="true"]{background:var(--hi)}
-.mv .n{font-size:11px;color:var(--muted)}
-.mv .s{font-family:var(--mincho);font-size:12px}
-.mv.b .s{color:var(--sente)} .mv.w .s{color:var(--gote)}
-.mv .k{font-family:var(--mincho);font-size:14px}
-.mv .l{font-size:11px;color:var(--muted);text-align:right}
-.mv .g{font-family:var(--mincho);font-size:13px;font-weight:700;text-align:center}
-.mv.b .g{color:var(--sente)} .mv.w .g{color:var(--gote)}
-.note{font-size:11px;color:var(--muted);padding:9px 14px;border-top:1px solid var(--rule);
-  line-height:1.6}
 .stack{display:grid;gap:18px}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -269,13 +253,6 @@ svg{display:block;width:100%;height:auto;overflow:visible}
         <div class="dl"><dt>評価値</dt><dd><span class="big" id="dCp"></span> <span id="dSide" style="color:var(--muted);font-size:12px"></span></dd></div>
         <div class="dl"><dt>読み筋</dt><dd class="pv" id="dLine"></dd></div>
       </div>
-    </div>
-
-    <div class="card">
-      <h2>棋譜</h2>
-      <div class="moves" id="movelist"></div>
-      <p class="note">損失＝その手で失った評価値。<b>?!</b> 疑問手（150〜）／<b>?</b> 悪手（300〜）／<b>??</b> 大悪手（500〜）。
-      勝敗が決した局面（±2000超）での上下は損失として数えていません。</p>
     </div>
   </div>
 </div>
@@ -637,7 +614,7 @@ function renderChart(){
     return s;
   }).join("");
 
-  // 悪手の印はグラフには打たない。1手ごとの点と重なって読めなくなる。棋譜欄と棋神の行にある
+  // 悪手の印はグラフには打たない。1手ごとの点と重なって読めなくなる。棋神の行にある
 
   $("chart").innerHTML = `
     ${grid.join("")}
@@ -665,7 +642,7 @@ function markChart(){
   d.setAttribute("cx", x); d.setAttribute("cy", y); d.setAttribute("opacity", 1);
 }
 
-/* ── 詳細と棋譜 ───────────────────────── */
+/* ── この局面 ───────────────────────── */
 // その局面の読み筋（USI列）。MultiPV 3 で解析した古いJSONは candidates[0] が同じもの
 const lineOf = p => (p.candidates && p.candidates.length && p.candidates[0].pv)
                  || (p.pv && p.pv.length ? p.pv : (p.best ? [p.best] : []));
@@ -680,7 +657,7 @@ function lineHtml(p){
   }).join("　");
 }
 
-let shownLine = "", curMv = null;
+let shownLine = "";
 
 function renderDetail(){
   const p = DATA.positions[ply];
@@ -694,38 +671,6 @@ function renderDetail(){
   $("plyLabel").textContent = inLine ? `+${pv.idx} / ${pv.moves.length}` : ply + " / " + N;
   $("plyLabel").className = "ply tnum" + (inLine ? " pv" : "");
   $("slider").value = ply;
-  const next = $("movelist").querySelector(`.mv[data-n="${ply}"]`);
-  if (next !== curMv){
-    if (curMv) curMv.setAttribute("aria-current", "false");
-    if (next) next.setAttribute("aria-current", "true");
-    curMv = next;
-  }
-}
-
-function renderMoves(){
-  $("movelist").innerHTML = DATA.moves.map(m => {
-    if (m.terminal) return `<button class="mv ${m.side}" data-n="${m.n}">
-      <span class="n tnum">${m.n}</span><span class="s"></span>
-      <span class="k">${m.kif}</span><span class="l"></span><span class="g"></span></button>`;
-    const sym = m.grade === "blunder" ? "??" : m.grade === "mistake" ? "?" : m.grade ? "?!" : "";
-    return `<button class="mv ${m.side}" data-n="${m.n}">
-      <span class="n tnum">${m.n}</span>
-      <span class="s">${m.side === "b" ? "▲" : "△"}</span>
-      <span class="k">${m.kif}</span>
-      <span class="l tnum">${m.loss ? "−" + m.loss : ""}</span>
-      <span class="g">${sym}</span></button>`;
-  }).join("");
-  $("movelist").querySelectorAll(".mv").forEach(el =>
-    el.onclick = () => go(Math.min(+el.dataset.n, N)));
-}
-
-// scrollIntoView はページ全体をスクロールさせることがある（「次の一手」を
-// 押すたびに画面が動く）。棋譜欄の中だけで位置を合わせる
-function keepVisible(el){
-  const box = $("movelist");
-  const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
-  if (r.top < b.top) box.scrollTop += r.top - b.top;
-  else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom;
 }
 
 /* ── 駒音 ─────────────────────────────── */
@@ -776,13 +721,11 @@ function go(n, {silent = false} = {}){
   ply = to;
   if (pv) pv = lineAt(ply);                // 棋神ONのまま本譜を動かしたら、新しい局面の読み筋の頭に
   renderBoard(); renderDetail(); renderKishinLine(); markChart();
-  if (curMv) keepVisible(curMv);
-  else $("movelist").scrollTop = 0;   // 開始局面に戻ったら棋譜欄も先頭へ
 }
 
 /* ── 棋神: 読み筋を盤で辿る ───────────── */
 // 局面 ply の読み筋を、全手分の局面ごと先に作っておく。以後は添字を動かすだけ。
-// グラフの印と棋譜欄は分岐点のまま動かさない（読み筋の途中の評価値は持っていない）
+// グラフの印は分岐点のまま動かさない（読み筋の途中の評価値は持っていない）
 function lineAt(ply, idx = 0){
   const moves = lineOf(DATA.positions[ply]);
   const states = [parseSfen(DATA.positions[ply].sfen)];
@@ -826,7 +769,7 @@ if (EI) $("eng").textContent =
   `${EI.evalMode}${EI.evalFile ? " " + EI.evalFile : ""} · ${EI.movetime}ms`;
 $("slider").max = N;
 
-buildBoard(); renderChart(); renderMoves(); go(0, {silent: true});
+buildBoard(); renderChart(); go(0, {silent: true});
 setSound(soundOn);
 
 $("first").onclick = () => go(0);
