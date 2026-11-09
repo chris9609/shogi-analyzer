@@ -793,7 +793,8 @@ addEventListener("keydown", e => {
   if (e.key === "l" || e.key === "L"){ stepFwd(); }
   if (e.key === "ArrowLeft"){ stepBack(); e.preventDefault(); }
   if (e.key === "ArrowRight"){ stepFwd(); e.preventDefault(); }
-  if (e.key === "Escape"){ setKishin(false); }
+  // Esc: 棋神中なら本譜へ。本譜なら全対局へ（公開版だけ。ローカル版は .back が無いので何もしない）
+  if (e.key === "Escape"){ if (pv) setKishin(false); else document.querySelector(".back")?.click(); }
   if (e.key === "k" || e.key === "K"){ $("kishin").click(); }
   if (e.key === "m" || e.key === "M"){ setSound(!soundOn); }
 });

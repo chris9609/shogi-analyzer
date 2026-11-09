@@ -20,7 +20,7 @@ WEB_LOADER = """await loadGame(new URLSearchParams(location.search).get("id")).c
   throw err;
 });
 document.title = `▲${DATA.sente} vs △${DATA.gote}`;"""
-BACK_LINK = '<a class="back" href="./">← 全対局</a>\n'
+BACK_LINK = '<a class="back" href="./" title="全対局に戻る（Esc）">← 全対局</a>\n'
 BACK_CSS = ('.back{font-size:12px;color:var(--muted);text-decoration:none;display:inline-block;'
             'margin-bottom:6px}.back:hover{color:var(--ink)}\n')
 
