@@ -789,14 +789,15 @@ $("dLine").addEventListener("click", e => {
 $("kishin").onclick = () => setKishin(!pv);
 addEventListener("keydown", e => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;  // ⌘L などブラウザの操作はそのまま通す
-  if (e.key === "h" || e.key === "H"){ stepBack(); }
-  if (e.key === "l" || e.key === "L"){ stepFwd(); }
+  // 文字キーは e.code（キーの位置）で見る。日本語入力ONだと e.key が "Process" などになり反応しないため
+  if (e.code === "KeyH"){ stepBack(); }
+  if (e.code === "KeyL"){ stepFwd(); }
   if (e.key === "ArrowLeft"){ stepBack(); e.preventDefault(); }
   if (e.key === "ArrowRight"){ stepFwd(); e.preventDefault(); }
   // Esc: 棋神中なら本譜へ。本譜なら全対局へ（公開版だけ。ローカル版は .back が無いので何もしない）
   if (e.key === "Escape"){ if (pv) setKishin(false); else document.querySelector(".back")?.click(); }
-  if (e.key === "k" || e.key === "K"){ $("kishin").click(); }
-  if (e.key === "m" || e.key === "M"){ setSound(!soundOn); }
+  if (e.code === "KeyK"){ $("kishin").click(); }
+  if (e.code === "KeyM"){ setSound(!soundOn); }
 });
 
 const tip = $("tip"), chart = $("chart");
