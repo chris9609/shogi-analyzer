@@ -222,9 +222,9 @@ svg{display:block;width:100%;height:auto;overflow:visible}
     <div class="hand b" id="handBottom"></div>
     <div class="ctl">
       <button id="first" title="開始局面">|◀</button>
-      <button id="prev" title="1手戻る">◀</button>
+      <button id="prev" title="1手戻る（← / H）">◀</button>
       <span class="ply tnum" id="plyLabel"></span>
-      <button id="next" title="1手進む">▶</button>
+      <button id="next" title="1手進む（→ / L）">▶</button>
       <button id="last" title="最終局面">▶|</button>
       <input type="range" id="slider" min="0" value="0">
       <button id="flip" title="盤を反転">⇅</button>
@@ -788,6 +788,9 @@ $("dLine").addEventListener("click", e => {
 });
 $("kishin").onclick = () => setKishin(!pv);
 addEventListener("keydown", e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;  // ⌘L などブラウザの操作はそのまま通す
+  if (e.key === "h" || e.key === "H"){ stepBack(); }
+  if (e.key === "l" || e.key === "L"){ stepFwd(); }
   if (e.key === "ArrowLeft"){ stepBack(); e.preventDefault(); }
   if (e.key === "ArrowRight"){ stepFwd(); e.preventDefault(); }
   if (e.key === "Escape"){ setKishin(false); }
